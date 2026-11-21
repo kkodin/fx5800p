@@ -1,0 +1,124 @@
+:root {
+  --body: #1c1d20;
+  --body2: #2a2b2f;
+  --lcd: #b9c4a6;
+  --lcd2: #a8b594;
+  --ink: #1f2a1c;
+  --bezel: #b8bcc0;
+  --fn: #4b5262;
+  --fn2: #383d4a;
+  --num: #121315;
+  --num2: #26282b;
+  --light: #c9ccd0;
+  --light2: #a9adb3;
+  --shift: #e0a12a;
+  --alpha: #c8303a;
+  --exe: #4057c4;
+  --exe2: #2f43a3;
+  --sl: #e8b23e;
+  --al: #e2545c;
+  --lcd-fs: 20px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: #0e0f11; color: #eee; font-family: system-ui, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+body { min-height: 100dvh; overscroll-behavior: none; }
+button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+/* 電卓本体：スマホ1画面に収める */
+.calc {
+  height: 100dvh; max-height: 980px; max-width: 480px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 1.1dvh;
+  padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
+  background: linear-gradient(100deg, var(--body2), var(--body) 70%);
+  -webkit-user-select: none; user-select: none;
+}
+@media (min-width: 520px) { .calc { border-radius: 26px; margin-top: 12px; height: calc(100dvh - 24px); box-shadow: 0 10px 40px #000a; } }
+
+/* 液晶 */
+.bezel { background: linear-gradient(#cfd2d5, var(--bezel)); border-radius: 10px; padding: 9px 10px; flex: 0 0 auto; box-shadow: inset 0 1px 0 #fff8, 0 2px 0 #0008; }
+.lcd {
+  position: relative; background: linear-gradient(170deg, var(--lcd), var(--lcd2)); color: var(--ink);
+  border-radius: 4px; box-shadow: inset 0 2px 6px #0004; padding: 2px 8px 6px; overflow: hidden;
+  font-family: "Consolas", "Menlo", "MS Gothic", "Osaka-mono", monospace;
+}
+.ind { height: calc(var(--lcd-fs) * .72); font: 700 calc(var(--lcd-fs) * .55)/1.3 system-ui, sans-serif; display: flex; gap: .7em; align-items: center; white-space: nowrap; overflow: hidden; }
+.ind b, .ind span { font-weight: 700; }
+.ind .i-s { background: var(--ink); color: var(--lcd); padding: 0 .3em; border-radius: 2px; }
+.ind .i-a { background: var(--ink); color: var(--lcd); padding: 0 .3em; border-radius: 2px; }
+.ind .ed { font-weight: 600; margin-right: auto; }
+.ind .busy { animation: blink .6s steps(2) infinite; }
+.screen { font-size: var(--lcd-fs); line-height: 1.22; height: calc(var(--lcd-fs) * 1.22 * 4); }
+.ln { height: 1.22em; white-space: pre; overflow: hidden; text-overflow: clip; }
+.ln.right { text-align: right; }
+.ln.inv { background: var(--ink); color: var(--lcd); }
+.ln.small { font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: .78em; line-height: 1.56; text-overflow: ellipsis; }
+.ln.tap { cursor: pointer; }
+.cur { background: var(--ink); color: var(--lcd); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { background: transparent; color: inherit; } }
+.probe { position: absolute; visibility: hidden; white-space: pre; font-size: 20px; }
+.editor {
+  display: block; width: 100%; height: calc(var(--lcd-fs) * 1.22 * 4); resize: none; border: 0; outline: 0; padding: 0;
+  background: transparent; color: var(--ink); font: calc(var(--lcd-fs) * .82)/1.35 "Consolas", "Menlo", "MS Gothic", monospace;
+  white-space: pre; overflow: auto; caret-color: var(--ink);
+}
+.editor[hidden], .screen[hidden] { display: none; }
+.lcd.editing .editor { height: calc(var(--lcd-fs) * 1.22 * 6); }
+
+/* 液晶の下の細い帯 */
+.bar { display: flex; justify-content: space-between; align-items: center; flex: 0 0 auto; }
+.mini { background: #33363c; border: 1px solid #4a4e55; border-radius: 12px; font-size: 12px; padding: 3px 10px; color: #cfd3d8; }
+.mini.on { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; }
+.ver { font-size: 10px; color: #777; }
+
+/* MODE・FUNCTION と REPLAY */
+.top { display: grid; grid-template-columns: 1fr 1fr 2.2fr; align-items: end; gap: 6px; flex: 0 0 auto; padding: 0 4px; }
+.round { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.round.r2 { transform: translateY(6px); }
+.round .lab { font-size: 10px; font-weight: 700; color: #f2f2f2; letter-spacing: .02em; }
+.round .lab em { color: var(--sl); font-style: normal; }
+.rkey { width: clamp(38px, 11vw, 50px); aspect-ratio: 1; border-radius: 50%; border: 1px solid #0c0c0d; background: radial-gradient(circle at 40% 30%, #4a4c51, #26272a 70%); box-shadow: 0 3px 0 #08090a; }
+.pad { position: relative; height: clamp(62px, 9.5dvh, 86px); border-radius: 44px; background: radial-gradient(ellipse at 50% 30%, #6a6d74, #3a3c41 70%); border: 1px solid #0c0c0d; box-shadow: 0 3px 0 #08090a; display: grid; grid-template-columns: 1fr 1.4fr 1fr; grid-template-rows: 1fr 1fr 1fr; overflow: hidden; }
+.pad button { border: 0; background: transparent; color: #d9dbe0; font-size: 12px; }
+.pad .p-up { grid-column: 2; grid-row: 1; }
+.pad .p-left { grid-column: 1; grid-row: 1 / 4; }
+.pad .p-right { grid-column: 3; grid-row: 1 / 4; }
+.pad .p-down { grid-column: 2; grid-row: 3; }
+.pad .replay { grid-column: 2; grid-row: 2; align-self: center; text-align: center; font-size: 10px; font-weight: 700; color: #f0f0f0; pointer-events: none; }
+.pad button:active, .rkey:active, .rkey.down { filter: brightness(1.5); }
+
+/* キー */
+.keypad { display: grid; flex: 1 1 0; min-height: 0; }
+.fkeys { grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(4, 1fr); gap: 0 6px; flex-grow: 4; }
+.nkeys { grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(4, 1fr); gap: 0 9px; flex-grow: 5.6; }
+.key { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; padding: 0; border: 0; background: transparent; min-height: 0; }
+.key .sub { display: flex; justify-content: space-between; font-size: 9.5px; line-height: 1.15; height: 1.2em; padding: 0 2px; white-space: nowrap; overflow: visible; font-weight: 700; }
+.key .sl { color: var(--sl); font-style: normal; }
+.key .al { color: var(--al); font-style: normal; margin-left: auto; }
+.key .main {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 0;
+  border-radius: 6px; margin-bottom: 4px; font-weight: 600; letter-spacing: .01em; white-space: nowrap;
+  border: 1px solid #0a0b0c; box-shadow: 0 3px 0 #050506, inset 0 1px 0 #ffffff2a;
+}
+.fkeys .main { font-size: clamp(11px, 3.4vw, 15px); background: linear-gradient(var(--fn), var(--fn2)); color: #f4f5f8; border-radius: 7px / 9px; }
+.nkeys .main { font-size: clamp(17px, 5.6vw, 25px); background: linear-gradient(var(--num2), var(--num)); color: #fff; border-radius: 8px; }
+.k-light .main { background: linear-gradient(#e3e5e8, var(--light2)) !important; color: #202226 !important; font-size: clamp(10px, 3.1vw, 13px) !important; }
+.k-shift .main { background: linear-gradient(#f0b640, var(--shift)) !important; color: #1d1a12 !important; font-size: clamp(10px, 3.1vw, 13px) !important; }
+.k-alpha .main { background: linear-gradient(#dc4851, var(--alpha)) !important; color: #fff !important; font-size: clamp(10px, 3.1vw, 13px) !important; }
+.k-del .main { background: linear-gradient(#dfe1e4, var(--light2)) !important; color: #1e2024 !important; font-size: clamp(14px, 4.4vw, 20px) !important; }
+.k-exe .main { background: linear-gradient(#5068d6, var(--exe2)) !important; color: #fff !important; font-size: clamp(14px, 4.4vw, 19px) !important; }
+.k-del .sub .sl, .k-exe .sub .sl { color: var(--sl); }
+.key.down .main, .key:active .main { transform: translateY(2px); box-shadow: 0 1px 0 #050506; filter: brightness(1.25); }
+
+.kbd { position: fixed; left: -200px; top: 0; width: 10px; opacity: 0; }
+.toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(30px); max-width: 92vw; background: #f2f2f2; color: #1b1b1b; padding: 9px 14px; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: .2s; z-index: 9; box-shadow: 0 6px 20px #0008; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 使い方（電卓の下にスクロールすると出る） */
+.help { max-width: 480px; margin: 14px auto 40px; padding: 0 14px; color: #d8dadf; font-size: 14px; line-height: 1.6; }
+.help summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.help h3 { font-size: 15px; margin: 16px 0 4px; color: #fff; }
+.help ul { padding-left: 1.2em; margin: 4px 0; }
+.help code { background: #2b2d32; padding: 1px 4px; border-radius: 4px; font-size: 13px; }
+.help .y { color: var(--sl); } .help .r { color: var(--al); }
+.help .note { color: #9aa0a8; font-size: 12.5px; }

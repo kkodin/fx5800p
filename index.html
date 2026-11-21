@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#1b1c1f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>プログラム関数電卓</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css?v=1.0.0">
+<script defer src="engine.js?v=1.0.0"></script>
+<script defer src="basic.js?v=1.0.0"></script>
+<script defer src="formulas.js?v=1.0.0"></script>
+<script defer src="app.js?v=1.0.0"></script>
+</head>
+<body>
+<main class="calc" aria-label="プログラム関数電卓">
+  <div class="bezel">
+    <div id="lcd" class="lcd">
+      <div id="ind" class="ind"></div>
+      <div id="screen" class="screen" aria-live="polite"></div>
+      <textarea id="editor" class="editor" hidden spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" inputmode="none" aria-label="プログラム編集"></textarea>
+    </div>
+  </div>
+  <div class="bar">
+    <button type="button" id="kbdBtn" class="mini">⌨ 文字入力</button>
+    <span id="ver" class="ver"></span>
+    <button type="button" id="helpBtn" class="mini">? 使い方</button>
+  </div>
+  <div class="top">
+    <div class="round">
+      <span class="lab">MODE <em>SETUP</em></span>
+      <button type="button" class="rkey" data-k="MODE" aria-label="MODE"></button>
+    </div>
+    <div class="round r2">
+      <span class="lab">FUNCTION</span>
+      <button type="button" class="rkey" data-k="FUNC" aria-label="FUNCTION"></button>
+    </div>
+    <div class="pad" aria-label="カーソル">
+      <button type="button" class="p-up" data-k="UP" aria-label="上">▲</button>
+      <button type="button" class="p-left" data-k="LEFT" aria-label="左">◀</button>
+      <span class="replay">REPLAY</span>
+      <button type="button" class="p-right" data-k="RIGHT" aria-label="右">▶</button>
+      <button type="button" class="p-down" data-k="DOWN" aria-label="下">▼</button>
+    </div>
+  </div>
+  <div id="fkeys" class="keypad fkeys"></div>
+  <div id="nkeys" class="keypad nkeys"></div>
+</main>
+<input type="file" id="fileIn" hidden>
+<input type="text" id="kbd" class="kbd" autocapitalize="characters" autocomplete="off" aria-label="名前入力">
+<div id="toast" class="toast" role="status"></div>
+
+<details id="help" class="help">
+<summary>使い方・対応している命令</summary>
+<div class="help-body">
+<h3>キーの基本</h3>
+<ul>
+<li><b class="y">SHIFT</b> の後にキーを押すと、キーの左上（黄色）の機能。<b class="r">ALPHA</b> の後は右上（赤）の文字。SHIFT→ALPHA で文字を続けて入れる A-LOCK。</li>
+<li>閉じカッコは式の最後なら省略できます（<code>(2+3)(4-1</code> → 15）。</li>
+<li>乗算記号は省略できます（<code>2A</code>、<code>3(4+1)</code>、<code>2sin(30)</code>）。</li>
+<li>▲▼ で前の計算式を呼び出し（REPLAY）、◀▶ で直前の式を直せます。</li>
+<li>PC ではキーボードの数字・記号・Enter・BackSpace・Esc・矢印も使えます。</li>
+</ul>
+<h3>度分秒</h3>
+<ul>
+<li><b>°′″</b> キーを度・分・秒の後に押します：<code>2°30°30°</code> ＝ 2°30′30″。</li>
+<li>答えの表示中に °′″ を押すと 60進数 ⇔ 10進数 を切り替え。SHIFT °′″ は <code>▸DMS</code>（答えを度分秒で）。</li>
+</ul>
+<h3>メモリー</h3>
+<ul>
+<li><b>SHIFT RCL（STO）</b>→ 文字キー：式（答え）を変数 A〜Z に記憶。</li>
+<li><b>RCL</b> → 文字キー：変数の値を呼び出し。文字キーは ALPHA なしで押せます。</li>
+<li><b>M+</b>／SHIFT M+（M−）：独立メモリー M に足す・引く。</li>
+<li>MODE → VAR で A〜Z の一覧。SETUP → ClrMemory で全部0。</li>
+</ul>
+<h3>CALC・SOLVE・FMLA</h3>
+<ul>
+<li><b>CALC</b>：変数を含む式（例 <code>3×A+B</code>、<code>S=A×B÷2</code>、<code>"MENSEKI":S=A×B÷2</code>）を入れて CALC。変数の値を入れて EXE。もう一度 CALC で値を変えて再計算。</li>
+<li><b>SOLVE</b>：方程式（例 <code>Y=AX²+B</code>）を入れて SOLVE。値と初期値を入れ、▲▼で解く変数を反転させて SOLVE。</li>
+<li><b>FMLA</b>：内蔵公式（測量の座標計算・逆計算・単曲線・ヘロン など）と自作公式（Formula モードのプログラム）。値を順に入れて EXE。答えが複数なら EXE で次へ。</li>
+</ul>
+<h3>プログラム</h3>
+<ul>
+<li><b>FILE</b> キーでプログラム一覧（実行）。<b>MODE → PROG</b> で NEW（新規）・EDIT（編集）・DELETE・txt 読込／書出・バックアップ。</li>
+<li>編集中：電卓のキーで入力、EXE で改行、SHIFT EXE で ◢、EXIT で保存して戻る。「⌨ 文字入力」でスマホのキーボードも使えます。</li>
+<li>FUNCTION → PROG で命令の一覧（If・For・While・Lbl・Goto・Locate・Getkey など）。SHIFT ×＝?、SHIFT ÷＝:、SHIFT S⇔D＝→、ALPHA M+＝"。</li>
+<li>実行中：◢ で止まったら EXE で続き。AC で中断。終わったら EXE でもう一度。</li>
+<li>txt の読み書きは CcEditor の書式（UTF-8・<code>→ ◢ ⇒ ≠ ≦ ≧ ▸DMS Z[n]</code>）に合わせています。</li>
+</ul>
+<h3>対応している命令</h3>
+<p><code>?→A　"文字"?→A　?A（現在値付き）　式→A　Z[n]　n→DimZ　◢　:　⇒　If～Then～Else～IfEnd　For～To～Step～Next　While～WhileEnd　Do～LpWhile　Break　Lbl・Goto　Prog "名前"　Return　Stop　Isz　Dsz　Cls　Locate　Getkey　"文字列"　Deg Rad Gra　Fix Sci Norm　ClrMemory　And Or Xor Not(</code></p>
+<p><code>sin cos tan sin⁻¹… sinh… log ln √ ∛ ˣ√ x² x³ x⁻¹ x! Abs Int Intg Frac Rnd Ran# RanInt# Pol Rec nPr nCr GCD LCM π e ᴇ °′″ ▸DMS</code></p>
+<p class="note">未対応：複素数・行列・統計・積分・微分・数列・方程式モード・BASE-N。表示は実機と同じ10桁ですが、内部の計算精度は実機と少し違います。</p>
+</div>
+</details>
+</body>
+</html>
