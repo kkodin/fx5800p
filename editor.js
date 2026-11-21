@@ -412,8 +412,17 @@
     window.addEventListener('storage', e => { if (e.key === KEY) { const name = cur && cur.p.name; load(); cur = null; const p = programs.find(x => x.name === name); if (p) openProgram(p); else renderList(); } });
     window.addEventListener('beforeunload', () => saveNow());
     let lastName = null; try { lastName = localStorage.getItem(KEY + '-editor-last'); } catch { /* 無視 */ }
+    // 電卓の PROG → EDIT（?p=名前）・NEW（?new=1）から開いたとき
+    const q = new URLSearchParams(location.search), want = q.get('p');
+    if (want) lastName = want;
     const first = programs.find(p => p.name === lastName) || programs.slice().sort((a, b) => a.name.localeCompare(b.name, 'en'))[0];
-    if (first) openProgram(first); else { renderList(); refresh(); showNew(); }
+    if (first) openProgram(first); else { renderList(); refresh(); }
+    if (q.has('new') || !first) showNew();
+    // 電卓から何度開いても、このタブで続けて開く
+    window.addEventListener('focus', () => {
+      const p2 = new URLSearchParams(location.search);
+      if (p2.toString()) history.replaceState(null, '', location.pathname);
+    });
   }
   window.addEventListener('DOMContentLoaded', init);
 })();

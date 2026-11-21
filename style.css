@@ -157,3 +157,15 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .cd { flex: 0 0 auto; background: #3a3f48; color: #f1f3f6; border: 1px solid #5a606b; border-radius: 12px; padding: 2px 10px; font: 600 13px "Consolas", "Menlo", monospace; }
 .cd.sel { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; }
 .bar .ver[hidden] { display: none; }
+
+/* SHIFT・ALPHA が有効な間のキーの表記 */
+.key.face-s .main { color: #ffc94d !important; }
+.key.face-a .main { color: #ff7b84 !important; }
+.k-del.face-s .main, .k-light.face-s .main { color: #8a5a00 !important; }
+.k-del.face-a .main, .k-light.face-a .main { color: #b3202b !important; }
+.key.face-off .main { opacity: .38; }
+.key.face-s .sub .sl, .key.face-a .sub .al { visibility: hidden; }
+.calc.shift-on .k-shift .main { box-shadow: 0 0 0 2px #fff6, 0 3px 0 #050506; filter: brightness(1.15); }
+.calc.alpha-on .k-alpha .main { box-shadow: 0 0 0 2px #fff6, 0 3px 0 #050506; filter: brightness(1.15); }
+.nkeys .key.face-s .main, .nkeys .key.face-a .main { font-size: clamp(13px, 4.2vw, 19px); }
+.fkeys .key.face-s .main, .fkeys .key.face-a .main { font-size: clamp(10px, 3vw, 14px); }

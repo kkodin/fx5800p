@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -151,6 +151,7 @@
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
     document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
+    updateKeyFaces();
     $('editor').hidden = mode !== 'edit';
     $('screen').hidden = mode === 'edit';
     if (mode === 'comp') return renderComp();
@@ -700,7 +701,7 @@
   // ---- PROG（プログラム） ------------------------------------------------
   function openProgMenu() {
     openMenu('Program Menu', [
-      { label: 'NEW 新規作成', act: startNew },
+      { label: 'NEW 新規作成' + (bigScreen() ? '（エディター）' : ''), act: () => bigScreen() ? openPcEditor('new=1') : startNew() },
       { label: 'RUN 実行', act: () => openProgList('RUN') },
       { label: 'EDIT 編集', act: () => openProgList('EDIT') },
       { label: 'DELETE 削除', act: () => openProgList('DELETE') },
@@ -718,7 +719,7 @@
       label: p.name + (p.mode === 'Formula' ? ' ·FM' : ''), key: p.name,
       act: () => {
         if (kind === 'RUN') { if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list'); }
-        else if (kind === 'EDIT') openEditor(p);
+        else if (kind === 'EDIT') { if (bigScreen()) openPcEditor('p=' + encodeURIComponent(p.name)); else openEditor(p); }
         else if (kind === 'DELETE') askConfirm('「' + p.name + '」を削除しますか', () => { S.programs = S.programs.filter(x => x !== p); save(); toast('削除しました'); openProgList('DELETE'); }, () => openProgList('DELETE'));
         else if (kind === 'EXPORT') { exportProgram(p); }
       }
@@ -1117,6 +1118,31 @@
   // ---- 画面部品 ---------------------------------------------------------
   let toastTimer;
   function toast(t, ms) { const n = $('toast'); n.textContent = t; n.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => n.classList.remove('show'), ms || 3000); }
+  // PC・タブレット（画面の短い辺が600px以上）では、プログラムの作成・編集を PC 用エディターで開く
+  function bigScreen() { return Math.min(screen.width, screen.height) >= 600; }
+  function openPcEditor(query) {
+    save();
+    const w = window.open('editor.html?' + query, 'fx5800p-editor');
+    if (!w) { location.href = 'editor.html?' + query; return; } // 新しい画面を開けないときは同じ画面で
+    toast('エディターで開きました。保存すると電卓にもすぐ反映されます');
+  }
+  // SHIFT・ALPHA が有効な間は、キーの表記をその機能に切り替える
+  function updateKeyFaces() {
+    const a = alpha || alock;
+    document.querySelectorAll('.keypad .key').forEach(b => {
+      const k = KEYS[b.dataset.k]; if (!k || k.id === 'SHIFT' || k.id === 'ALPHA') return;
+      const main = b.querySelector('.main');
+      let text = k.label, cls = '';
+      if (shift) { if (k.sl) { text = k.sl; cls = 'face-s'; } else cls = 'face-off'; }
+      else if (a) { if (k.al) { text = k.al; cls = 'face-a'; } else cls = 'face-off'; }
+      if (main.textContent !== text) main.textContent = text;
+      b.classList.toggle('face-s', cls === 'face-s');
+      b.classList.toggle('face-a', cls === 'face-a');
+      b.classList.toggle('face-off', cls === 'face-off');
+    });
+    document.querySelector('.calc').classList.toggle('shift-on', shift);
+    document.querySelector('.calc').classList.toggle('alpha-on', a && !shift);
+  }
   function keyHtml(k) {
     return '<button type="button" class="key ' + k.cls + '" data-k="' + k.id + '" aria-label="' + esc(k.label) + '">' +
       '<span class="sub"><i class="sl">' + esc(k.sl || '') + '</i><i class="al">' + esc(k.al || '') + '</i></span>' +
@@ -1148,8 +1174,20 @@
   }
   function physicalKeys() {
     const map = { Enter: 'EXE', Backspace: 'DEL', Escape: 'AC', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', '+': 'ADD', '-': 'SUB', '*': 'MUL', '/': 'DIV', '(': 'LP', ')': 'RP', ',': 'COMMA', '.': 'DOT', '^': 'POW' };
+    // PC の Shift だけを押して離したら、電卓の SHIFT と同じ（Shift＋文字は今までどおり文字）
+    let shiftAlone = false;
+    document.addEventListener('keydown', e => { if (e.key === 'Shift') { if (!e.repeat) shiftAlone = true; } else shiftAlone = false; }, true);
+    document.addEventListener('keyup', e => {
+      if (e.key !== 'Shift' || !shiftAlone) return;
+      shiftAlone = false;
+      if (e.ctrlKey || e.altKey || e.metaKey || mode === 'name') return;
+      press('SHIFT');
+    });
+    window.addEventListener('blur', () => { shiftAlone = false; });
+    $('lcd').addEventListener('pointerdown', () => { shiftAlone = false; });
     document.addEventListener('keydown', e => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Shift') return;
       // 候補が出ているとき：Tab で決定、↑↓ で選ぶ、Esc で閉じる
       if (cand.list.length && cand.kind === mode) {
         if (e.key === 'Tab') { e.preventDefault(); acceptCand(); return; }
