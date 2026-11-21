@@ -294,6 +294,11 @@
   }
   function renderError() {
     const e = errState.e;
+    // 計算画面で命令を打って EXE した場合は、プログラムの書き方へ案内する
+    if (errState.back === 'comp' && e.prog === '(COMP)') {
+      paint([line(e.kind, { inv: true }), line(e.detail, { small: true }), line('書くのは MODE→PROG→NEW（EXE=改行）', { small: true }), line('[◀][▶]:式に戻る　[AC]:消す', { small: true })]);
+      return;
+    }
     const where = e.prog ? (e.prog + (e.line ? ' ' + e.line + '行' : '')) : '';
     paint([line(e.kind, { inv: true }), line(e.detail || where, { small: true }), line(e.detail && where ? where : '[AC] :Cancel', { small: true }), line(errState.back === 'comp' || errState.back === 'edit' ? '[◀][▶]:Goto' : '[EXIT]:戻る', { small: true })]);
   }
@@ -307,7 +312,7 @@
     }
     if ((k.id === 'LEFT' || k.id === 'RIGHT') && back === 'edit' && errState.prog) { openEditor(errState.prog, errState.e.line); return; }
     if (k.id === 'AC' || k.id === 'EXIT' || k.id === 'EXE' || k.id === 'LEFT' || k.id === 'RIGHT') {
-      if (back === 'comp') { mode = 'comp'; comp.shown = null; comp.cur = comp.toks.length; }
+      if (back === 'comp') { mode = 'comp'; comp.shown = null; if (k.id === 'AC') comp.toks = []; comp.cur = comp.toks.length; }
       else if (back === 'calc') { mode = 'calc'; calc.phase = 'input'; }
       else if (back === 'solve') { mode = 'solve'; solve.phase = 'input'; }
       else if (back === 'fmla') { mode = 'fmla'; fm.phase = 'input'; }
