@@ -142,3 +142,10 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .mi.sel { background: var(--ink); color: var(--lcd); border-color: var(--ink); }
 .mi.sel .no { background: var(--lcd); color: var(--ink); }
 .menu-list .empty { padding: 20px; text-align: center; opacity: .7; }
+
+/* 液晶上の表示（D・Fix など）はタップで選べる */
+.ind .tapind { cursor: pointer; padding: 0 .35em; border-radius: 3px; }
+.ind .tapind:hover, .ind .tapind:active { background: #0002; }
+.ind .tapind.faint { opacity: .5; font-weight: 600; }
+.ind .tapind { position: relative; }
+.ind .tapind::after { content: ""; position: absolute; inset: -9px -5px; }

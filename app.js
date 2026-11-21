@@ -114,9 +114,10 @@
     if (shift) ind.push('<b class="i-s">S</b>');
     if (alpha || alock) ind.push('<b class="i-a">' + (alock ? 'A̲' : 'A') + '</b>');
     if (pending) ind.push('<b>' + pending + '</b>');
-    if ((S.vars.M || 0) !== 0) ind.push('<b>M</b>');
-    ind.push('<span>' + { Deg: 'D', Rad: 'R', Gra: 'G' }[S.angle] + '</span>');
-    if (S.disp.mode !== 'Norm') ind.push('<span>' + S.disp.mode + '</span>');
+    if ((S.vars.M || 0) !== 0) ind.push('<b class="tapind" data-ind="var" title="変数の一覧">M</b>');
+    // タップで角度・表示桁を選べる
+    ind.push('<span class="tapind" data-ind="angle" title="角度の単位を選ぶ">' + { Deg: 'D', Rad: 'R', Gra: 'G' }[S.angle] + '</span>');
+    ind.push('<span class="tapind' + (S.disp.mode === 'Norm' ? ' faint' : '') + '" data-ind="disp" title="表示の桁を選ぶ">' + (S.disp.mode === 'Norm' ? 'Norm' + S.disp.n : S.disp.mode + ' ' + S.disp.n) + '</span>');
     if (mode === 'run' && run && run.wait && run.wait.type === 'pause') ind.push('<b>Disp</b>');
     if (mode === 'run' && run && !run.wait && !run.done) ind.push('<b class="busy">▮</b>');
     if (mode === 'edit' && edit) ind.unshift('<span class="ed">' + esc(edit.prog.name) + (edit.prog.mode === 'Formula' ? ' FM' : '') + '</span>');
@@ -635,6 +636,7 @@
 
   // ---- MODE・SETUP -----------------------------------------------------
   function openMode() {
+    setupReturn = 'comp';
     openMenu('MODE', [
       { label: 'COMP 通常計算', act: () => { mode = 'comp'; } },
       { label: 'PROG プログラム', act: openProgMenu },
@@ -642,19 +644,44 @@
       { label: 'VAR 変数一覧', act: openVarList }
     ]);
   }
-  function openSetup() {
-    const set = fn => () => { fn(); save(); toast('設定しました'); mode = 'comp'; };
-    openMenu('SETUP 角度・表示', [
-      { label: 'Deg 度' + (S.angle === 'Deg' ? ' ✓' : ''), act: set(() => { S.angle = 'Deg'; }) },
-      { label: 'Rad ラジアン' + (S.angle === 'Rad' ? ' ✓' : ''), act: set(() => { S.angle = 'Rad'; }) },
-      { label: 'Gra グラード' + (S.angle === 'Gra' ? ' ✓' : ''), act: set(() => { S.angle = 'Gra'; }) },
-      { label: 'Fix 小数桁固定', act: () => openMenu('Fix 0〜9', [...Array(10).keys()].map(n => ({ label: 'Fix ' + n, act: set(() => { S.disp = { mode: 'Fix', n }; }) })), { back: openSetup, numbered: false, onKey: k => digitPick(k, n => set(() => { S.disp = { mode: 'Fix', n }; })()) }) },
-      { label: 'Sci 有効桁数', act: () => openMenu('Sci 1〜10', [...Array(10).keys()].map(n => ({ label: 'Sci ' + (n + 1), act: set(() => { S.disp = { mode: 'Sci', n: n + 1 }; }) })), { back: openSetup, numbered: false }) },
-      { label: 'Norm 1' + (S.disp.mode === 'Norm' && S.disp.n === 1 ? ' ✓' : ''), act: set(() => { S.disp = { mode: 'Norm', n: 1 }; }) },
-      { label: 'Norm 2' + (S.disp.mode === 'Norm' && S.disp.n === 2 ? ' ✓' : ''), act: set(() => { S.disp = { mode: 'Norm', n: 2 }; }) },
-      { label: 'ClrMemory 変数0', act: () => askConfirm('A〜Z・Z[ ]・M を0にしますか', () => { const keep = S.vars.Ans; S.vars = blankVars(); S.vars.Ans = keep; save(); mode = 'comp'; toast('変数をクリアしました'); }, openSetup) }
-    ], { back: openMode });
+  // 設定を変えて、開く前の画面（計算・実行中の入力など）へ戻る
+  let setupReturn = 'comp';
+  const toComp = () => { mode = setupReturn === 'menu' ? 'comp' : setupReturn; };
+  const setAndClose = (fn, msg) => () => { fn(); save(); toast(msg || '設定しました'); toComp(); };
+  const angleItems = () => [
+    { label: 'Deg' + (S.angle === 'Deg' ? ' ✓' : '') + ' 度（360°）', act: setAndClose(() => { S.angle = 'Deg'; }, '角度：Deg（度）') },
+    { label: 'Rad' + (S.angle === 'Rad' ? ' ✓' : '') + ' ラジアン', act: setAndClose(() => { S.angle = 'Rad'; }, '角度：Rad（ラジアン）') },
+    { label: 'Gra' + (S.angle === 'Gra' ? ' ✓' : '') + ' グラード（400）', act: setAndClose(() => { S.angle = 'Gra'; }, '角度：Gra（グラード）') }
+  ];
+  const now = (m, n) => S.disp.mode === m && (n === undefined || S.disp.n === n) ? ' ✓' : '';
+  function openFix(back) {
+    openMenu('Fix 小数点以下の桁数', [...Array(10).keys()].map(n => ({ label: 'Fix ' + n + now('Fix', n), act: setAndClose(() => { S.disp = { mode: 'Fix', n }; }, '表示：Fix ' + n) })),
+      { back, numbered: false, onKey: k => digitPick(k, n => setAndClose(() => { S.disp = { mode: 'Fix', n }; }, '表示：Fix ' + n)()) });
   }
+  function openSci(back) {
+    openMenu('Sci 有効桁数', [...Array(10).keys()].map(n => ({ label: 'Sci ' + (n + 1) + now('Sci', n + 1), act: setAndClose(() => { S.disp = { mode: 'Sci', n: n + 1 }; }, '表示：Sci ' + (n + 1)) })),
+      { back, numbered: false, onKey: k => digitPick(k, n => setAndClose(() => { S.disp = { mode: 'Sci', n: n === 0 ? 10 : n }; }, '表示：Sci ' + (n === 0 ? 10 : n))()) });
+  }
+  const dispItems = back => [
+    { label: 'Fix' + now('Fix') + ' 小数点以下の桁数を固定', act: () => openFix(back) },
+    { label: 'Sci' + now('Sci') + ' 有効桁数を固定', act: () => openSci(back) },
+    { label: 'Norm 1' + now('Norm', 1) + ' 通常', act: setAndClose(() => { S.disp = { mode: 'Norm', n: 1 }; }, '表示：Norm 1') },
+    { label: 'Norm 2' + now('Norm', 2) + ' 小さい数も小数で', act: setAndClose(() => { S.disp = { mode: 'Norm', n: 2 }; }, '表示：Norm 2') }
+  ];
+  function remember() { if (mode !== 'menu' && mode !== 'confirm') setupReturn = mode; }
+  // SHIFT MODE（SETUP）。戻るは開く前の画面へ。
+  function openSetup() {
+    remember();
+    const self = () => openSetup();
+    openMenu('SETUP 角度・表示', [
+      ...angleItems(),
+      ...dispItems(self),
+      { label: 'ClrMemory 変数を0に', act: () => askConfirm('A〜Z・Z[ ]・M を0にしますか', () => { const keep = S.vars.Ans; S.vars = blankVars(); S.vars.Ans = keep; save(); toComp(); toast('変数をクリアしました'); }, self) }
+    ], { back: toComp });
+  }
+  // 液晶の「D」「Fix」などをタップしたとき
+  function openAngleMenu() { remember(); openMenu('角度の単位', angleItems(), { back: toComp }); }
+  function openDispMenu() { remember(); const self = () => openDispMenu(); openMenu('表示の桁', dispItems(self), { back: toComp }); }
   function digitPick(k, fn) { if (/^[0-9]$/.test(k.id)) { fn(Number(k.id)); return true; } return false; }
   function openVarList() {
     const items = LETTERS.split('').map(L => ({ label: L + '=' + E.formatNumber(S.vars[L] || 0, S.disp), act: () => { mode = 'comp'; compRecall(L); } }));
@@ -1106,7 +1133,18 @@
   function init() {
     load();
     buildKeys();
-    $('screen').addEventListener('click', lcdTap);
+    // 液晶のタップは「液晶の上で押して液晶の上で離した」ときだけ受ける。
+    // （キーを押した直後にメニューが広がり、離した指が液晶の項目に当たって選ばれてしまうのを防ぐ）
+    let downOn = null;
+    $('lcd').addEventListener('pointerdown', e => { downOn = e.target.closest('[data-tap],[data-ind]'); });
+    $('screen').addEventListener('click', e => { const t = e.target.closest('[data-tap]'); if (!t || t !== downOn) return; downOn = null; lcdTap(e); });
+    $('ind').addEventListener('click', e => {
+      const t = e.target.closest('[data-ind]'); if (!t || t !== downOn) return; downOn = null;
+      if (['run', 'edit', 'name'].includes(mode) || pending) return;
+      const k = t.dataset.ind;
+      if (k === 'angle') openAngleMenu(); else if (k === 'disp') openDispMenu(); else if (k === 'var') { remember(); openVarList(); menu.back = toComp; }
+      render();
+    });
     $('editor').addEventListener('input', editChanged);
     $('fileIn').addEventListener('change', e => onFiles([...e.target.files]));
     $('kbdBtn').addEventListener('click', () => {
