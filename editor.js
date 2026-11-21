@@ -311,30 +311,6 @@
 
   // ---- 入力候補（打ち始めると候補を出し、Tab で決める） ----
   // [表示, 入れる文字（| はカーソル位置）, 説明, 別名]
-  const WORDS = [
-    ['Abs(', 'Abs(', '絶対値'], ['And', ' And ', 'かつ'], ['Ans', 'Ans', '直前の答え'],
-    ['Break', 'Break', 'ループを抜ける'], ['Cls', 'Cls', '画面を消す'], ['ClrMemory', 'ClrMemory', 'A〜Z を0に'],
-    ['cos(', 'cos(', 'コサイン'], ['cos⁻¹(', 'cos⁻¹(', '逆コサイン', 'acos'], ['cosh(', 'cosh(', ''],
-    ['Deg', 'Deg', '角度を度に'], ['DimZ', 'DimZ', '配列の確保 n→DimZ'], ['Do', 'Do\n|\nLpWhile ', 'Do〜LpWhile ブロック'], ['Dsz', 'Dsz ', '1引いて0なら次をとばす'],
-    ['e^(', 'e^(', 'eのべき乗', 'exp'], ['Else', 'Else ', ''], ['Fix', 'Fix ', '小数の桁を固定'],
-    ['For', 'For 1→I To |\n\nNext', 'For〜Next ブロック'], ['For（1行）', 'For |→I To ', 'For だけ'], ['Frac(', 'Frac(', '小数部分'],
-    ['GCD(', 'GCD(', '最大公約数'], ['Getkey', 'Getkey', '押したキーのコード'], ['Goto', 'Goto ', 'Lbl へ飛ぶ'], ['Gra', 'Gra', '角度をグラードに'],
-    ['If', 'If |\nThen \nIfEnd', 'If〜Then〜IfEnd ブロック'], ['If Else', 'If |\nThen \nElse \nIfEnd', 'If〜Else〜IfEnd ブロック'], ['IfEnd', 'IfEnd', ''],
-    ['Int(', 'Int(', '整数部分'], ['Intg(', 'Intg(', 'それ以下の最大の整数'], ['Isz', 'Isz ', '1足して0なら次をとばす'],
-    ['LCM(', 'LCM(', '最小公倍数'], ['Lbl', 'Lbl ', 'ラベル'], ['Locate', 'Locate 1,1,|', '位置を決めて表示 列,行,値'],
-    ['log(', 'log(', '常用対数（log(a,b) も可）'], ['ln(', 'ln(', '自然対数'], ['LpWhile', 'LpWhile ', ''],
-    ['Neg(', 'Neg(', '符号反転'], ['Next', 'Next', ''], ['Norm', 'Norm 1', '表示を通常に'], ['Not(', 'Not(', '否定'],
-    ['Or', ' Or ', 'または'], ['Pol(', 'Pol(|)', '直交→極座標（I=距離, J=角度）'], ['Prog', 'Prog "|"', 'サブルーチンを呼ぶ'],
-    ['Rad', 'Rad', '角度をラジアンに'], ['Ran#', 'Ran#', '0〜1の乱数'], ['RanInt#(', 'RanInt#(|)', '整数の乱数 (a,b)'],
-    ['Rec(', 'Rec(|)', '極→直交座標（I=X, J=Y）'], ['Return', 'Return', '呼び出し元へ戻る'], ['Rnd(', 'Rnd(', '表示桁で丸める'],
-    ['Sci', 'Sci ', '有効桁数'], ['sin(', 'sin(', 'サイン'], ['sin⁻¹(', 'sin⁻¹(', '逆サイン', 'asin'], ['sinh(', 'sinh(', ''],
-    ['Step', ' Step ', 'For の刻み'], ['Stop', 'Stop', '終了'], ['Then', 'Then ', ''], ['To', ' To ', 'For の終わり'],
-    ['tan(', 'tan(', 'タンジェント'], ['tan⁻¹(', 'tan⁻¹(', '逆タンジェント', 'atan'], ['tanh(', 'tanh(', ''],
-    ['While', 'While |\n\nWhileEnd', 'While〜WhileEnd ブロック'], ['WhileEnd', 'WhileEnd', ''], ['Xor', ' Xor ', '排他的論理和'],
-    ['▸DMS', '▸DMS', '度分秒で表示', 'DMS'], ['π', 'π', '円周率', 'pi'], ['√(', '√(', '平方根', 'sqrt'], ['∛(', '∛(', '立方根', 'cbrt'],
-    ['Z[ ]', 'Z[|]', '配列 Z[n]', 'Z['], ['°', '°', '度分秒の入力 2°30°15°', 'do dms'],
-    ['?→', '?→', '入力', 'input'], ['◢', '◢', '表示して止める', 'disp']
-  ];
   let ac = { list: [], sel: 0, start: 0, open: false };
   let charW = 0;
   function measure() {
@@ -350,12 +326,9 @@
     if ((before.match(/"/g) || []).length % 2) return hideAC();
     const m = before.match(/[A-Za-z#]+$/);
     if (!m) return hideAC();
-    const w = m[0].toLowerCase();
-    const strip = s => s.replace(/^[\s▸]+/, '').toLowerCase();
-    const list = WORDS.filter(([label, , , alias]) => strip(label).startsWith(w) || (alias || '').split(' ').some(x => x && x.toLowerCase().startsWith(w)));
-    // ちょうど打ち終えた1語しか無いときは出さない
-    if (!list.length || (list.length === 1 && strip(list[0][0]).replace(/\($/, '') === w && !list[0][1].includes('\n'))) return hideAC();
-    ac = { list: list.slice(0, 9), sel: 0, start: a - m[0].length, open: true };
+    const list = FxComplete.match(m[0]);
+    if (!list.length) return hideAC();
+    ac = { list, sel: 0, start: a - m[0].length, open: true };
     const box = $('ac');
     box.innerHTML = ac.list.map((x, i) => '<div class="it' + (i ? '' : ' on') + '" data-i="' + i + '"><b>' + esc(x[0]) + '</b><span>' + esc(x[2]) + '</span></div>').join('') +
       '<div class="hint">Tab で決定　↑↓ で選ぶ　Esc で閉じる</div>';
@@ -393,6 +366,14 @@
     if (e.ctrlKey && e.altKey && e.code === 'KeyN') { e.preventDefault(); showNew(); return; }
     if (document.activeElement !== $('src')) return;
     if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); insert('◢\n'); return; }
+    // Backspace：直前が命令（Prog 、sin( など）なら丸ごと消す（実機の DEL と同じ）
+    if (e.key === 'Backspace' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      const t = $('src'), a = t.selectionStart;
+      if (a === t.selectionEnd && a > 0) {
+        const n = FxComplete.tokenBefore(t.value.slice(0, a));
+        if (n > 1) { e.preventDefault(); t.setSelectionRange(a - n, a); if (!document.execCommand('delete')) t.setRangeText('', a - n, a, 'end'); onEdit(); hideAC(); return; }
+      }
+    }
     if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); if (!expandSnippet()) insert(''); return; }
     if (e.altKey && !e.ctrlKey && ALT[e.code]) { e.preventDefault(); insert(ALT[e.code][0]); }
   }

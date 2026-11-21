@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -813,7 +813,12 @@
     if (id === 'EXE') { if (shift) return editInsert('◢'); return editInsert('\n'); }
     if (id === 'DEL') {
       const a = ta.selectionStart, b = ta.selectionEnd;
-      if (a !== b) ta.setRangeText('', a, b, 'end'); else if (a > 0) { const prev = Array.from(ta.value.slice(0, a)).pop(); ta.setRangeText('', a - prev.length, a, 'end'); }
+      if (a !== b) ta.setRangeText('', a, b, 'end');
+      else if (a > 0) {
+        // 直前が命令（Prog 、sin( など）なら丸ごと消す（実機の DEL と同じ）
+        const n = FxComplete.tokenBefore(ta.value.slice(0, a)) || Array.from(ta.value.slice(0, a)).pop().length;
+        ta.setRangeText('', a - n, a, 'end');
+      }
       editChanged(); return;
     }
     if (id === 'AC') return;
@@ -957,6 +962,50 @@
     if (!alock) alpha = false;
     render();
     if (mode === 'edit') { const ta = $('editor'); if (document.activeElement !== ta) ta.focus({ preventScroll: true }); }
+    updateCands();
+  }
+
+  // ---- 入力候補（英字を打つと候補を出し、Tab かタップで決める） ----
+  let cand = { list: [], sel: 0, kind: null, len: 0 };
+  function updateCands() {
+    let word = '';
+    if (mode === 'edit') {
+      const ta = $('editor'), a = ta.selectionStart;
+      if (a === ta.selectionEnd) {
+        const v = ta.value, before = v.slice(v.lastIndexOf('\n', a - 1) + 1, a);
+        if ((before.match(/"/g) || []).length % 2 === 0) { const m = before.match(/[A-Za-z#]+$/); if (m) word = m[0]; }
+      }
+    } else if (mode === 'comp' && !comp.shown) {
+      let i = comp.cur;
+      while (i > 0 && /^[A-Za-z]$/.test(comp.toks[i - 1])) i--;
+      word = comp.toks.slice(i, comp.cur).join('');
+    }
+    const list = word ? FxComplete.match(word, { oneLine: mode === 'comp' }) : [];
+    cand = { list, sel: 0, kind: mode, len: word.length };
+    renderCands();
+  }
+  function renderCands() {
+    const box = $('cands');
+    const show = cand.list.length && cand.kind === mode;
+    box.hidden = !show; $('ver').hidden = !!show;
+    if (!show) { box.innerHTML = ''; return; }
+    box.innerHTML = cand.list.map((x, i) => '<button type="button" class="cd' + (i === cand.sel ? ' sel' : '') + '" data-c="' + i + '" title="' + esc(x[2] || '') + '">' + esc(x[0]) + '</button>').join('');
+    const sel = box.querySelector('.sel'); if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  function acceptCand(i) {
+    const x = cand.list[i ?? cand.sel]; if (!x) return;
+    if (cand.kind === 'edit' && mode === 'edit') {
+      const ta = $('editor'), a = ta.selectionStart, k = x[1].indexOf('|'), plain = x[1].replace('|', '');
+      ta.setRangeText(plain, a - cand.len, a, 'end');
+      if (k >= 0) { const p = a - cand.len + k; ta.setSelectionRange(p, p); }
+      editChanged(); ta.focus({ preventScroll: true });
+    } else if (cand.kind === 'comp' && mode === 'comp') {
+      comp.toks.splice(comp.cur - cand.len, cand.len); comp.cur -= cand.len;
+      // 計算画面では命令の部分だけを1つの塊として入れる（Pol(|) → Pol(、Prog "|" → Prog "）
+      comp.toks.splice(comp.cur, 0, x[1].split('|')[0]); comp.cur++;
+    }
+    cand = { list: [], sel: 0, kind: null, len: 0 };
+    renderCands(); render();
   }
   function handle(k, wasShift, wasAlpha) {
     const id = k.id;
@@ -1101,8 +1150,16 @@
     const map = { Enter: 'EXE', Backspace: 'DEL', Escape: 'AC', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', '+': 'ADD', '-': 'SUB', '*': 'MUL', '/': 'DIV', '(': 'LP', ')': 'RP', ',': 'COMMA', '.': 'DOT', '^': 'POW' };
     document.addEventListener('keydown', e => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // 候補が出ているとき：Tab で決定、↑↓ で選ぶ、Esc で閉じる
+      if (cand.list.length && cand.kind === mode) {
+        if (e.key === 'Tab') { e.preventDefault(); acceptCand(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cand.sel = (cand.sel + (e.key === 'ArrowDown' ? 1 : -1) + cand.list.length) % cand.list.length; renderCands(); return; }
+        if (e.key === 'Escape') { e.preventDefault(); cand.list = []; renderCands(); return; }
+      }
       if (document.activeElement === $('editor') || document.activeElement === $('kbd')) {
         if (e.key === 'Escape') { e.preventDefault(); press('EXIT'); }
+        if (e.key === 'Backspace' && document.activeElement === $('editor')) { e.preventDefault(); press('DEL'); }
+        if (e.key === 'Tab') e.preventDefault();
         return;
       }
       let id = map[e.key];
@@ -1110,7 +1167,7 @@
       if (!id && /^[a-zA-Z]$/.test(e.key)) {
         const L = e.key.toUpperCase();
         if (mode === 'name') { if (Array.from(nameIn.text).length < 12) nameIn.text += L; render(); e.preventDefault(); return; }
-        e.preventDefault(); insertText(L); render(); return;
+        e.preventDefault(); insertText(L); render(); updateCands(); return;
       }
       if (!id && (e.key === '=' || e.key === '?' || e.key === ':' || e.key === '"')) { e.preventDefault(); insertText(e.key); render(); return; }
       if (id) { e.preventDefault(); press(id); }
@@ -1145,7 +1202,10 @@
       if (k === 'angle') openAngleMenu(); else if (k === 'disp') openDispMenu(); else if (k === 'var') { remember(); openVarList(); menu.back = toComp; }
       render();
     });
-    $('editor').addEventListener('input', editChanged);
+    $('editor').addEventListener('input', () => { editChanged(); updateCands(); });
+    $('editor').addEventListener('click', updateCands);
+    $('cands').addEventListener('pointerdown', e => e.preventDefault()); // 編集欄のカーソルを保つ
+    $('cands').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) acceptCand(Number(b.dataset.c)); });
     $('fileIn').addEventListener('change', e => onFiles([...e.target.files]));
     $('kbdBtn').addEventListener('click', () => {
       if (mode === 'edit') {

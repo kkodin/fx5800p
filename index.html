@@ -9,12 +9,13 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=1.1.0">
-<script defer src="engine.js?v=1.1.0"></script>
-<script defer src="basic.js?v=1.1.0"></script>
-<script defer src="formulas.js?v=1.1.0"></script>
-<script defer src="import.js?v=1.1.0"></script>
-<script defer src="app.js?v=1.1.0"></script>
+<link rel="stylesheet" href="style.css?v=1.2.0">
+<script defer src="engine.js?v=1.2.0"></script>
+<script defer src="basic.js?v=1.2.0"></script>
+<script defer src="formulas.js?v=1.2.0"></script>
+<script defer src="import.js?v=1.2.0"></script>
+<script defer src="complete.js?v=1.2.0"></script>
+<script defer src="app.js?v=1.2.0"></script>
 </head>
 <body>
 <main class="calc" aria-label="プログラム関数電卓">
@@ -28,6 +29,7 @@
   <div class="bar">
     <button type="button" id="kbdBtn" class="mini">⌨ 文字入力</button>
     <span id="ver" class="ver"></span>
+    <div id="cands" class="cands" hidden aria-label="入力候補"></div>
     <button type="button" id="helpBtn" class="mini">? 使い方</button>
   </div>
   <div class="top">
