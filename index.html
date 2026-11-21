@@ -9,11 +9,12 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=1.0.0">
-<script defer src="engine.js?v=1.0.0"></script>
-<script defer src="basic.js?v=1.0.0"></script>
-<script defer src="formulas.js?v=1.0.0"></script>
-<script defer src="app.js?v=1.0.0"></script>
+<link rel="stylesheet" href="style.css?v=1.1.0">
+<script defer src="engine.js?v=1.1.0"></script>
+<script defer src="basic.js?v=1.1.0"></script>
+<script defer src="formulas.js?v=1.1.0"></script>
+<script defer src="import.js?v=1.1.0"></script>
+<script defer src="app.js?v=1.1.0"></script>
 </head>
 <body>
 <main class="calc" aria-label="プログラム関数電卓">
@@ -83,12 +84,14 @@
 <li><b>FMLA</b>：内蔵公式（測量の座標計算・逆計算・単曲線・ヘロン など）と自作公式（Formula モードのプログラム）。値を順に入れて EXE。答えが複数なら EXE で次へ。</li>
 </ul>
 <h3>プログラム</h3>
+<p class="pc-edit">PC でプログラムを書くときは <a href="editor.html" target="_blank">プログラム エディター</a> が便利です（入力候補・記号のショートカット・文法チェック・.ccl/.cce の読込）。同じブラウザなら電卓と中身が共通です。</p>
 <ul>
 <li><b>FILE</b> キーでプログラム一覧（実行）。<b>MODE → PROG</b> で NEW（新規）・EDIT（編集）・DELETE・txt 読込／書出・バックアップ。</li>
 <li>編集中：電卓のキーで入力、EXE で改行、SHIFT EXE で ◢、EXIT で保存して戻る。「⌨ 文字入力」でスマホのキーボードも使えます。</li>
 <li>FUNCTION → PROG で命令の一覧（If・For・While・Lbl・Goto・Locate・Getkey など）。SHIFT ×＝?、SHIFT ÷＝:、SHIFT S⇔D＝→、ALPHA M+＝"。</li>
 <li>実行中：◢ で止まったら EXE で続き。AC で中断。終わったら EXE でもう一度。</li>
 <li>txt の読み書きは CcEditor の書式（UTF-8・<code>→ ◢ ⇒ ≠ ≦ ≧ ▸DMS Z[n]</code>）に合わせています。</li>
+<li>IMPORT では、電卓から CcLinker で吸い出した <b>.ccl</b> と、CcEditor の <b>.cce</b> もそのまま読めます（複数まとめて選べます。同じ名前は新しい方を使います）。スマホでは Dropbox などのファイルから選べます。</li>
 </ul>
 <h3>対応している命令</h3>
 <p><code>?→A　"文字"?→A　?A（現在値付き）　式→A　Z[n]　n→DimZ　◢　:　⇒　If～Then～Else～IfEnd　For～To～Step～Next　While～WhileEnd　Do～LpWhile　Break　Lbl・Goto　Prog "名前"　Return　Stop　Isz　Dsz　Cls　Locate　Getkey　"文字列"　Deg Rad Gra　Fix Sci Norm　ClrMemory　And Or Xor Not(</code></p>

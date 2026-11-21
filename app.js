@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -149,6 +149,7 @@
   function render() {
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
+    document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
     $('editor').hidden = mode !== 'edit';
     $('screen').hidden = mode === 'edit';
     if (mode === 'comp') return renderComp();
@@ -320,17 +321,19 @@
     menu = { title, items, sel: 0, top: 0, back: opt.back || null, numbered: opt.numbered !== false, onKey: opt.onKey || null };
     mode = 'menu';
   }
+  // メニューは液晶を大きく広げ、指で選びやすい一覧にする（短い項目はボタンを並べる）
   function renderMenu() {
-    const m = menu, rows = 3;
-    if (m.sel < m.top) m.top = m.sel;
-    if (m.sel >= m.top + rows) m.top = m.sel - rows + 1;
-    const lines = [line(m.title + (m.items.length > rows ? '  ' + (m.top > 0 ? '▲' : ' ') + (m.top + rows < m.items.length ? '▼' : '') : ''), { small: true, cls: 'title' })];
-    if (!m.items.length) lines.push(line('（なし）'));
-    for (let i = m.top; i < Math.min(m.items.length, m.top + rows); i++) {
-      const it = m.items[i];
-      lines.push(line((m.numbered && i < 9 ? (i + 1) + ':' : '') + it.label, { inv: i === m.sel, tap: i, small: it.small }));
-    }
-    paint(lines);
+    const m = menu;
+    const short = m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9);
+    const items = m.items.map((it, i) =>
+      '<button type="button" class="mi' + (i === m.sel ? ' sel' : '') + '" data-tap="' + i + '">' +
+      (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lb">' + esc(it.label) + '</span></button>').join('');
+    $('screen').innerHTML =
+      '<div class="menu-head"><button type="button" class="mback" data-tap="back">◀ 戻る</button><b>' + esc(m.title) + '</b><span class="mcount">' + m.items.length + '件</span></div>' +
+      '<div class="menu-list' + (short ? ' grid' : '') + '">' + (items || '<div class="empty">（なし）</div>') + '</div>';
+    const sel = $('screen').querySelector('.mi.sel');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+    indicators();
   }
   function menuKey(k) {
     const m = menu, id = k.id;
@@ -669,7 +672,7 @@
       { label: 'RUN 実行', act: () => openProgList('RUN') },
       { label: 'EDIT 編集', act: () => openProgList('EDIT') },
       { label: 'DELETE 削除', act: () => openProgList('DELETE') },
-      { label: 'IMPORT txt読込', act: () => pickFile('prog') },
+      { label: 'IMPORT 読込 txt/ccl/cce', act: () => pickFile('prog') },
       { label: 'EXPORT txt書出', act: () => openProgList('EXPORT') },
       { label: 'BACKUP 全保存', act: backupAll },
       { label: 'RESTORE 全復元', act: () => pickFile('backup') }
@@ -970,7 +973,7 @@
     filePurpose = purpose;
     const f = $('fileIn');
     f.multiple = purpose === 'prog';
-    f.accept = purpose === 'prog' ? '.txt,.bas,text/plain' : '.json,application/json';
+    f.accept = purpose === 'prog' ? '.txt,.bas,.ccl,.cce,text/plain' : '.json,application/json';
     f.value = ''; f.click();
   }
   async function readText(file) {
@@ -992,12 +995,30 @@
       } catch (e) { toast(e.message); }
       return;
     }
-    const got = [];
+    let got = [];
+    const bad = [];
     for (const f of files) {
       if (f.size > 200000) { toast(f.name + ' は大きすぎます'); continue; }
-      const name = f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim();
-      got.push({ name, mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, '') });
+      try {
+        // .ccl（電卓から吸い出したファイル）・.cce（CcEditor）は中身を変換して読む
+        const dec = await FxImport.decodeFile(f);
+        if (dec) {
+          got.push({ name: dec.name, mode: dec.mode, source: dec.source, time: f.lastModified, ccl: /\.ccl$/i.test(f.name) });
+          if (dec.unknown) bad.push(dec.name + '（読めない記号 ' + dec.unknown + '）');
+          continue;
+        }
+        const name = f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim();
+        got.push({ name, mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, ''), time: f.lastModified });
+      } catch (e) { bad.push(f.name + '：' + e.message); }
     }
+    // 同じ名前が複数あれば、更新日時の新しい方（同じなら .ccl）を使う
+    const pick = new Map();
+    for (const g of got) {
+      const o = pick.get(g.name);
+      if (!o || g.time > o.time || (g.time === o.time && g.ccl && !o.ccl)) pick.set(g.name, g);
+    }
+    got = [...pick.values()].map(g => ({ name: g.name, mode: g.mode, source: g.source }));
+    if (bad.length) toast('注意：' + bad.join('、'), 7000);
     const dup = got.filter(g => S.programs.some(p => p.name === g.name));
     const apply = overwrite => {
       let n = 0;
@@ -1067,7 +1088,10 @@
   function lcdTap(e) {
     const ln = e.target.closest('[data-tap]'); if (!ln) return;
     const t = ln.dataset.tap;
-    if (mode === 'menu') { const i = Number(t); if (menu.items[i]) { if (menu.sel === i || true) { menu.sel = i; menu.items[i].act(); } } }
+    if (mode === 'menu') {
+      if (t === 'back') { menuKey({ id: 'EXIT' }); }
+      else { const i = Number(t); if (menu.items[i]) { menu.sel = i; menu.items[i].act(); } }
+    }
     else if (mode === 'calc' || mode === 'solve') { const st = mode === 'calc' ? calc : solve; if (substCommit(st, mode)) st.idx = Number(t); }
     else if (mode === 'confirm') { confirmKey({ id: t === 'yes' ? 'EXE' : 'EXIT' }); }
     else if (mode === 'name') nameTap(t);
@@ -1101,6 +1125,19 @@
     window.addEventListener('resize', fitLcd);
     render();
     migrateOld();
+    // PC エディターで直したプログラムを、開いている電卓にもすぐ反映する
+    window.addEventListener('storage', e => {
+      if (e.key !== STORE_KEY || !e.newValue) return;
+      try { const d = JSON.parse(e.newValue); if (Array.isArray(d.programs)) { S.programs = d.programs; if (mode === 'menu' && /Prog/.test(menu.title)) openProgList(lastListKind); render(); } } catch { /* 無視 */ }
+    });
+    // エディターの「電卓で実行」（?run=名前）
+    const runName = new URLSearchParams(location.search).get('run');
+    if (runName) {
+      history.replaceState(null, '', location.pathname);
+      const p = S.programs.find(x => x.name === runName);
+      if (p) { if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list'); render(); }
+      else toast('プログラム「' + runName + '」がありません');
+    }
     // localhost（開発中の確認）では古いファイルを掴まないようオフライン用キャッシュを使わない
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
     window.__fx = { press, get S() { return S; }, get mode() { return mode; } }; // 動作確認用

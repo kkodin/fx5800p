@@ -187,11 +187,6 @@
       let v;
       if (t.t === 'num') {
         v = t.v;
-        if (!t.k && isOp('⌟')) { // 分数 a⌟b⌟c
-          take(); const b = take(); if (!b || b.t !== 'num') throw syntax('分数', here());
-          if (isOp('⌟')) { take(); const c = take(); if (!c || c.t !== 'num') throw syntax('分数', here()); if (c.v === 0) throw mathErr('分母が0'); v = v + b.v / c.v; }
-          else { if (b.v === 0) throw mathErr('分母が0'); v = v / b.v; }
-        }
         if (peek() && peek().t === 'post' && peek().v === '°' && !t.k) v = dmsTail(v);
       } else if (t.t === 'op' && t.v === '(') {
         v = logic(); closeParen();
@@ -252,10 +247,21 @@
       if (t.t === 'word' && ['ans', 'ran', 'getkey', 'dimz'].includes(t.v)) return true;
       return t.t === 'op' && t.v === '(';
     }
+    // 分数 a⌟b（＝a÷b）と帯分数 a⌟b⌟c（＝a＋b÷c）。(式)⌟(式) も可。べき乗の次に優先。
+    function fraction() {
+      const parts = [power()];
+      while (isOp('⌟')) { take(); parts.push(power()); }
+      if (parts.length === 1) return parts[0];
+      if (parts.length > 3) throw syntax('分数', here());
+      const den = parts[parts.length - 1];
+      if (den === 0) throw mathErr('分母が0');
+      if (parts.length === 2) return parts[0] / den;
+      return parts[0] + (parts[0] < 0 ? -1 : 1) * parts[1] / den;
+    }
     // 乗算記号の省略（2A、2π、3(4+1)、2sin(30)）は × ÷ より優先
     function implicit() {
-      let v = power();
-      while (startsValue()) v *= power();
+      let v = fraction();
+      while (startsValue()) v *= fraction();
       return v;
     }
     function unary() {

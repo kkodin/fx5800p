@@ -122,3 +122,23 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .help code { background: #2b2d32; padding: 1px 4px; border-radius: 4px; font-size: 13px; }
 .help .y { color: var(--sl); } .help .r { color: var(--al); }
 .help .note { color: #9aa0a8; font-size: 12.5px; }
+
+/* メニューを開いたとき：液晶をキーの上まで広げ、項目を大きく並べる */
+.calc.menu-open .top, .calc.menu-open .fkeys, .calc.menu-open .bar { display: none; }
+.calc.menu-open .bezel { flex: 1 1 0; min-height: 0; display: flex; }
+.calc.menu-open .nkeys { flex: 0 0 34dvh; }
+.calc.menu-open .lcd { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.calc.menu-open .screen { height: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; font-size: 16px; }
+.menu-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 6px; border-bottom: 1px solid #0003; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+.menu-head b { font-size: 16px; flex: 1; }
+.menu-head .mcount { font-size: 12px; opacity: .7; }
+.mback { border: 1px solid #0005; background: #0000000d; border-radius: 6px; padding: 4px 10px; font-size: 14px; color: var(--ink); }
+.menu-list { flex: 1; overflow: auto; padding: 6px 0; display: flex; flex-direction: column; gap: 4px; overscroll-behavior: contain; }
+.menu-list.grid { display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; }
+.mi { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid #0003; border-radius: 7px; background: #ffffff38; color: var(--ink); text-align: left; font: 600 17px "Consolas", "Menlo", "MS Gothic", monospace; }
+.menu-list.grid .mi { justify-content: center; text-align: center; padding: 6px 4px; font-size: 15px; }
+.mi .no { flex: 0 0 auto; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--ink); color: var(--lcd); display: grid; place-items: center; font-size: 13px; }
+.mi .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-weight: 600; }
+.mi.sel { background: var(--ink); color: var(--lcd); border-color: var(--ink); }
+.mi.sel .no { background: var(--lcd); color: var(--ink); }
+.menu-list .empty { padding: 20px; text-align: center; opacity: .7; }

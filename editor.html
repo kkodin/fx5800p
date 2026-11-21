@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>プログラム エディター</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="editor.css?v=1.1.0">
+<script defer src="engine.js?v=1.1.0"></script>
+<script defer src="basic.js?v=1.1.0"></script>
+<script defer src="import.js?v=1.1.0"></script>
+<script defer src="editor.js?v=1.1.0"></script>
+</head>
+<body>
+<header class="top">
+  <div class="title"><b>プログラム エディター</b><span class="sub">fx-5800P 形式</span></div>
+  <div class="tools">
+    <button type="button" id="bNew" title="新しいプログラム（Ctrl+Alt+N）">＋ 新規</button>
+    <button type="button" id="bOpen" title="txt・ccl・cce を開く（Ctrl+O）">📂 開く</button>
+    <button type="button" id="bSave" class="primary" title="保存（Ctrl+S）">💾 保存</button>
+    <button type="button" id="bCheck" title="文法チェック（F7）">✔ チェック</button>
+    <button type="button" id="bRun" title="電卓で実行（F5）">▶ 電卓で実行</button>
+    <span class="sep"></span>
+    <button type="button" id="bExport" title="CcEditor 用 txt で書き出し（Ctrl+Shift+S）">⬇ txt書出</button>
+    <button type="button" id="bExportAll" title="全部を txt で書き出し">⬇ 全部書出</button>
+    <span class="sep"></span>
+    <label class="opt" title="-> → など、打った文字をその場で記号に変える"><input type="checkbox" id="optAuto" checked> 記号に自動変換</label>
+    <button type="button" id="bKeys" title="ショートカット一覧（F1）">⌨ ショートカット</button>
+    <a class="calc-link" href="./" target="fx5800p-calc">電卓を開く ↗</a>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="side">
+    <div class="side-head">
+      <input type="search" id="search" placeholder="プログラムを探す" aria-label="プログラムを探す">
+    </div>
+    <div id="newBox" class="newbox" hidden>
+      <label>名前 <input id="newName" maxlength="12" placeholder="例 ZAHYO" autocomplete="off"></label>
+      <div class="modes"><label><input type="radio" name="newMode" value="COMP" checked> 通常（COMP）</label><label><input type="radio" name="newMode" value="Formula"> 公式（Formula）</label></div>
+      <div class="row"><button type="button" id="newOk" class="primary">作る</button><button type="button" id="newCancel">やめる</button></div>
+      <p id="newErr" class="err"></p>
+    </div>
+    <ul id="list" class="list" aria-label="プログラム一覧"></ul>
+    <div class="side-foot"><span id="count"></span></div>
+  </aside>
+
+  <section class="center">
+    <div class="tabbar">
+      <input id="pName" class="pname" maxlength="12" aria-label="プログラム名" spellcheck="false">
+      <span id="pMode" class="badge"></span>
+      <span id="dirty" class="dirty" hidden>● 未保存</span>
+      <span class="grow"></span>
+      <button type="button" id="bDelete" class="danger" title="このプログラムを削除">🗑 削除</button>
+    </div>
+    <div id="delBox" class="delbox" hidden>このプログラムを削除しますか？（元に戻せません）
+      <button type="button" id="delYes" class="danger">削除する</button><button type="button" id="delNo">やめる</button></div>
+    <div class="code" id="codeWrap">
+      <div class="gutter" id="gutter" aria-hidden="true"></div>
+      <div class="area">
+        <pre class="hl" id="hl" aria-hidden="true"></pre>
+        <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="プログラム"></textarea>
+        <div id="ac" class="ac" hidden role="listbox" aria-label="入力候補"></div>
+      </div>
+    </div>
+    <div class="status">
+      <span id="pos">1行 1桁</span>
+      <span id="size"></span>
+      <span id="msg" class="msg"></span>
+    </div>
+  </section>
+
+  <aside class="palette" id="palette">
+    <div class="pal-tabs">
+      <button type="button" data-pal="cmd" class="on">命令</button>
+      <button type="button" data-pal="fn">関数・記号</button>
+      <button type="button" data-pal="keys">ショートカット</button>
+    </div>
+    <div id="pal" class="pal-body"></div>
+  </aside>
+</div>
+<input type="file" id="fileIn" hidden multiple accept=".txt,.bas,.ccl,.cce,text/plain">
+<div id="toast" class="toast" role="status"></div>
+</body>
+</html>

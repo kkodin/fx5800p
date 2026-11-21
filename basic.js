@@ -50,15 +50,13 @@
     }
     res.push({ text, line });
   }
-  // 最後の「→」（カッコ・文字列の外）
+  // 最後の「→」（文字列の外）。実機と同じく、→ の前の閉じカッコ省略も許す。
   function lastArrow(s) {
-    let q = false, depth = 0, at = -1;
+    let q = false, at = -1;
     for (let i = 0; i < s.length; i++) {
       const c = s[i];
       if (c === '"') q = !q;
-      else if (!q && (c === '(' || c === '[')) depth++;
-      else if (!q && (c === ')' || c === ']')) depth--;
-      else if (!q && c === '→' && depth <= 0) at = i;
+      else if (!q && c === '→') at = i;
     }
     return at;
   }
