@@ -7,6 +7,7 @@
   'use strict';
   const FS = [0.8, 0.9, 1, 1.15, 1.3];
   const CURSOR_SCALE = [0.85, 1, 1.25];
+  const APPEARANCE = ['font', 'lcd', 'lcdFont', 'cursorSide', 'cursorSize'];
   const BLOCKS = ['lcd', 'upper', 'nkeys', 'tabs'];
   const NAMES = { lcd: 'ディスプレイ', upper: '上のボタン', nkeys: 'テンキー', tabs: 'タブの画面' };
   const DEF = {
@@ -46,6 +47,28 @@
     return s;
   }
   function save() { opt.save(st); }
+  const presetNameKey = name => name.normalize('NFKC').trim().toLowerCase();
+  const validPreset = p => p && typeof p.name === 'string' && ['portrait', 'landscape'].includes(p.orient) && p.layout;
+  function disambiguatePresetNames() {
+    const presets = st.presets.filter(validPreset);
+    const reserved = new Set(presets.map(p => presetNameKey(p.name)));
+    const seen = new Set();
+    let renamed = false;
+    for (const p of presets) {
+      const key = presetNameKey(p.name);
+      if (seen.has(key)) {
+        const side = p.orient === 'landscape' ? '横' : '縦';
+        const base = p.name.trim();
+        let n = 1, name = base + '（' + side + '）';
+        while (reserved.has(presetNameKey(name))) name = base + '（' + side + ' ' + ++n + '）';
+        p.name = name;
+        reserved.add(presetNameKey(name));
+        renamed = true;
+      }
+      seen.add(key);
+    }
+    return renamed;
+  }
 
   // ---- 画面に当てはめる ----
   function apply() {
@@ -210,16 +233,39 @@
   function openSettings() {
     const D = root.FxDialog, h = D.h;
     let dlg = null;
-    const seg = (items, cur, on) => h('div', { class: 'lo-seg' }, items.map(([v, t]) => h('button', { type: 'button', class: v === cur ? 'on' : '', text: t, onclick: e => { on(v); e.currentTarget.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === e.currentTarget)); } })));
+    const refresh = [];
+    const update = () => { save(); apply(); refresh.forEach(fn => fn()); };
+    function seg(items, current, on) {
+      const buttons = items.map(([v, t]) =>
+        h('button', { type: 'button', text: t, onclick: () => { on(v); update(); } }));
+      for (const [i, [value]] of items.entries()) {
+        const refreshButton = () => {
+          const active = value === current();
+          buttons[i].classList.toggle('on', active);
+          buttons[i].setAttribute('aria-pressed', String(active));
+        };
+        refresh.push(refreshButton);
+        refreshButton();
+      }
+      return h('div', { class: 'lo-seg' }, buttons);
+    }
     const presetBox = h('div', { class: 'lo-presets' });
     const nameIn = h('input', { placeholder: '例：iPad 横・現場用', maxlength: 30 });
     function drawPresets() {
       presetBox.innerHTML = '';
       if (!st.presets.length) { presetBox.append(h('p', { class: 'lo-note', text: 'まだ保存した配置はありません。' })); return; }
       st.presets.forEach((p, i) => {
+        if (!validPreset(p)) return;
         presetBox.append(h('div', { class: 'lo-preset' }, [
           h('div', { class: 'nm', html: '' }, [p.name, h('small', { text: (p.orient === 'landscape' ? '横' : '縦') + '・文字 ' + p.font + '・' + new Date(p.time).toLocaleDateString('ja-JP') })]),
-          h('button', { type: 'button', text: '呼び出す', onclick: () => { st[p.orient] = clone(p.layout); st.font = p.font; save(); apply(); opt.toast && opt.toast('「' + p.name + '」を' + (p.orient === 'landscape' ? '横' : '縦') + 'の配置にしました'); } }),
+          h('button', { type: 'button', text: '呼び出す', onclick: () => {
+            st[p.orient] = clone(p.layout);
+            if (info.orient !== p.orient) st.orient = p.orient;
+            for (const key of APPEARANCE) if (p[key] != null) st[key] = p[key];
+            st = fix(st);
+            update();
+            opt.toast?.('「' + p.name + '」を呼び出しました');
+          } }),
           h('button', { type: 'button', text: '削除', onclick: async () => { if (await D.confirm('配置を消す', '「' + p.name + '」を消します。', '消す', 'danger')) { st.presets.splice(i, 1); save(); drawPresets(); } } })
         ]));
       });
@@ -227,41 +273,49 @@
     drawPresets();
     const o = () => info.orient === 'landscape' ? '横' : '縦';
     const modeNote = h('p', { class: 'lo-note' });
-    const updNote = () => { modeNote.textContent = 'いまの向き：' + o() + '（' + (st[info.orient].mode === 'free' ? '自由配置' : '標準の並び') + '）'; };
-    updNote();
+    const reset = h('button', { type: 'button', onclick: () => { st[info.orient] = clone(DEF[info.orient]); update(); } });
+    const refreshMode = () => {
+      modeNote.textContent = 'いまの向き：' + o() + '（' + (st[info.orient].mode === 'free' ? '自由配置' : '標準の並び') + '）';
+      reset.textContent = '初めの配置に戻す（' + o() + '）';
+    };
+    refresh.push(refreshMode);
+    refreshMode();
     dlg = D.open({
       title: '配置と大きさ', width: 520,
       body: h('div', { class: 'lo-form' }, [
         h('div', {}, [h('h4', { text: '画面の向き（OS の向きの固定に関係なく選べる）' }),
-          seg([['auto', '自動'], ['portrait', '縦'], ['landscape', '横']], st.orient, v => { st.orient = v; save(); apply(); updNote(); }),
+          seg([['auto', '自動'], ['portrait', '縦'], ['landscape', '横']], () => st.orient, v => { st.orient = v; }),
           h('p', { class: 'lo-note', text: '「縦」「横」に決めると、端末の向きと違うときは画面ごと回して表示します。縦と横で、それぞれの配置を覚えます。' })]),
         h('div', {}, [h('h4', { text: '文字の大きさ（ボタン・タブ・一覧）' }),
-          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], st.font, v => { st.font = v; save(); apply(); }),
+          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], () => st.font, v => { st.font = v; }),
           h('p', { class: 'lo-note', text: 'ボタン・タブの画面・一覧の文字に効きます。' })]),
         h('div', {}, [h('h4', { text: 'ディスプレイの表示' }),
-          seg([['wide', '見やすい表示（行と桁を増やす）'], ['real', '実機と同じ（16 桁×4 行）']], st.lcd, v => { st.lcd = v; save(); apply(); }),
+          seg([['wide', '見やすい表示（行と桁を増やす）'], ['real', '実機と同じ（16 桁×4 行）']], () => st.lcd, v => { st.lcd = v; }),
           h('p', { class: 'lo-note', text: '見やすい表示では、ディスプレイの高さと幅に合わせて行と桁が増えます。プログラムの入力・答え・日本語の変数名も残します。実機の表示を確かめるときは「実機と同じ」を選ぶと 16 桁×4 行になります。' }),
           h('h4', { text: 'ディスプレイの文字（見やすい表示のとき）' }),
-          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], st.lcdFont, v => { st.lcdFont = v; save(); apply(); }),
+          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], () => st.lcdFont, v => { st.lcdFont = v; }),
           h('p', { class: 'lo-note', text: '小さくするほど、行と桁が増えます（16 桁より少なくはなりません）。' })]),
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
-          seg([['standard', '標準の並び'], ['free', '自由配置']], st[info.orient].mode, v => { st[info.orient].mode = v; save(); apply(); updNote(); }),
+          seg([['standard', '標準の並び'], ['free', '自由配置']], () => st[info.orient].mode, v => { st[info.orient].mode = v; }),
           h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
         h('div', {}, [h('h4', { text: 'カーソルキーの位置' }),
-          seg([['left', '左'], ['right', '右']], st.cursorSide, v => { st.cursorSide = v; save(); apply(); }),
+          seg([['left', '左'], ['right', '右']], () => st.cursorSide, v => { st.cursorSide = v; }),
           h('h4', { text: 'カーソルキーの大きさ' }),
-          seg([[1, '小'], [2, '標準'], [3, '大']], st.cursorSize, v => { st.cursorSize = v; save(); apply(); })]),
-        h('div', {}, [h('h4', { text: '名前を付けて保存（いまの向きの配置と文字の大きさ）' }),
-          h('div', { class: 'lo-new' }, [nameIn, h('button', { type: 'button', text: '保存', onclick: () => {
+          seg([[1, '小'], [2, '標準'], [3, '大']], () => st.cursorSize, v => { st.cursorSize = v; })]),
+        h('div', {}, [h('h4', { text: '名前を付けて保存' }),
+          h('div', { class: 'lo-new' }, [nameIn, h('button', { type: 'button', text: '保存', onclick: async () => {
             const n = nameIn.value.trim(); if (!n) { nameIn.focus(); return; }
-            const i = st.presets.findIndex(p => p.name === n && p.orient === info.orient);
-            const item = { name: n, orient: info.orient, font: st.font, layout: clone(st[info.orient]), time: Date.now() };
+            const key = presetNameKey(n);
+            const i = st.presets.findIndex(p => validPreset(p) && presetNameKey(p.name) === key);
+            const item = { name: n, orient: info.orient, layout: clone(st[info.orient]), time: Date.now() };
+            for (const field of APPEARANCE) item[field] = st[field];
+            if (i >= 0 && !(await D.confirm('配置を上書き', '「' + st.presets[i].name + '」を現在の設定で上書きしますか？', '上書き'))) return;
             if (i >= 0) st.presets[i] = item; else st.presets.push(item);
             save(); drawPresets(); nameIn.value = ''; opt.toast && opt.toast('「' + n + '」を保存しました');
           } })]),
           presetBox]),
-        h('div', {}, [h('div', { class: 'lo-seg' }, [h('button', { type: 'button', text: '初めの配置に戻す（' + o() + '）', onclick: () => { st[info.orient] = clone(DEF[info.orient]); save(); apply(); updNote(); } })])])
+        h('div', { class: 'lo-seg' }, [reset])
       ]),
       buttons: [{ label: '閉じる', kind: 'primary' }]
     });
@@ -269,6 +323,7 @@
 
   function init(o) {
     opt = o; st = fix(o.load());
+    if (disambiguatePresetNames()) save();
     bindLcdResize();
     apply();
     let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(apply, 80); });
