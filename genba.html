@@ -33,6 +33,10 @@
   <button type="button" role="tab" data-tab="hist">履歴</button>
 </nav>
 
+<div id="backupNote" class="note-bar" hidden role="status">
+  <span id="backupMsg"></span>
+  <span class="note-btns"><button type="button" id="backupLater">あとで</button><button type="button" id="backupNow" class="primary">バックアップ</button></span>
+</div>
 <main>
   <section id="tab-pts" class="tab">
     <div id="noSite" class="empty" hidden>
@@ -54,7 +58,7 @@
         <span class="grow"></span>
         <button type="button" id="add">＋ 追加</button>
         <button type="button" id="imp">取り込み</button>
-        <button type="button" id="exp">CSV 書出</button>
+        <button type="button" id="exp" aria-haspopup="menu">書き出し</button>
       </div>
       <ul id="list" class="list" aria-label="座標一覧"></ul>
       <button type="button" id="more" class="more" hidden>さらに表示</button>

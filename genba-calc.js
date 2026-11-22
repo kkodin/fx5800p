@@ -388,6 +388,8 @@
     const snap = SK.snapshot(calc, res, settings(), calc.memo);
     await ST.putCalc(state.site.id, snap);
     toast('履歴に保存しました（測点 ' + snap.targets.length + ' 点）');
+    await ST.setMeta('calcsSinceBackup', (await ST.getMeta('calcsSinceBackup', 0)) + 1);
+    GB.checkBackup();
     if (state.tab === 'hist') renderHist();
   }
 
@@ -470,8 +472,9 @@
   bindCalc();
   $('histList').addEventListener('click', e => { const li = e.target.closest('li[data-id]'); if (!li) return; const c = hist.find(x => x.id === li.dataset.id); if (c) histDetail(c); });
   $('histCsv').addEventListener('click', () => {
-    GB.download(GB.safeName(state.site.name) + '-測設履歴-' + GB.today() + '.csv', '﻿' + SK.historyCsv(hist, v => A.format(v, { style: settings().angleStyle })), 'text/csv');
-    toast(hist.length + ' 件を CSV で書き出しました');
+    guard(async () => {
+      if (await GB.download(GB.safeName(state.site.name) + '-測設履歴-' + GB.today() + '.csv', '\ufeff' + SK.historyCsv(hist, v => A.format(v, { style: settings().angleStyle })), 'text/csv')) toast(hist.length + ' 件を CSV で書き出しました');
+    });
   });
   let lastSite = null;
   GB.hooks.points.push(async () => {

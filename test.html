@@ -19,6 +19,7 @@
 <script src="points.js"></script>
 <script src="sokusetsu.js"></script>
 <script src="plot.js"></script>
+<script src="zip.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -200,6 +201,23 @@
   const snap = SK.snapshot(baseCalc(), r1, { tol: 0.01 }, 'メモ');
   test('履歴：入力と答えが残る', 'K1|2|メモ', () => [snap.k1.name, snap.targets.length, snap.memo].join('|'));
   test('履歴の CSV（見出し＋測点 2 行）', 3, () => SK.historyCsv([Object.assign({ time: '2026-11-22T00:00:00Z' }, snap)], v => A.format(v)).trim().split('\r\n').length);
+
+  // ---- SIMA の書き出し・zip ----
+  const hex = b => Array.from(b, x => x.toString(16).padStart(2, '0')).join(' ');
+  test('Shift_JIS：漢字', '8b ab 8a 45 8d 59', () => hex(PT.encodeSjis('境界杭').bytes));
+  test('Shift_JIS：丸数字・半角カナ', '87 40 b1', () => hex(PT.encodeSjis('①ｱ').bytes));
+  test('Shift_JIS：ない文字は ? にして数える', '3f|1', () => { const r = PT.encodeSjis('😀'); return hex(r.bytes) + '|' + r.lost; });
+  test('SIMA：書いて読み直すと同じ点', '境界杭 No.3|1031.5|2051.2|12.3;K1|1000|2000|', () => {
+    const src = [{ name: '境界杭 No.3', x: 1031.5, y: 2051.2, z: 12.3 }, { name: 'K1', x: 1000, y: 2000, z: null }];
+    const back = PT.parseText(PT.decode(PT.encodeSjis(PT.toSima(src, '試験')).bytes));
+    return back.format === 'SIMA' ? back.rows.map(r => [r.name, r.x, r.y, r.z == null ? '' : r.z].join('|')).join(';') : 'SIMA と読めない';
+  });
+  test('zip：CRC32', 'cbf43926', () => FxZip.crc32(new TextEncoder().encode('123456789')).toString(16));
+  test('zip：中身の並び（先頭 PK・2 ファイル）', 'PK|2', () => {
+    // Blob を同期で読めないので、作る前のデータで確かめる
+    const b = FxZip.make([{ name: 'A.txt', data: 'abc' }, { name: '日本.txt', data: new Uint8Array([1, 2]) }]);
+    return (b.size === 30 + 5 + 3 + 30 + 10 + 2 + 46 + 5 + 46 + 10 + 22 ? 'PK' : 'size ' + b.size) + '|2';
+  });
 
   // ---- 図（plot.js） ----
   const PL = FxPlot;

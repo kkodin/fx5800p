@@ -12,9 +12,36 @@
   function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600); }
   const f3 = v => v == null || !Number.isFinite(+v) ? '' : (+v).toFixed(3);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  function download(name, text, type) {
-    const a = h('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
-    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  function saveLocal(blob, name) {
+    const a = h('a', { href: URL.createObjectURL(blob), download: name });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  // ファイルを渡す：スマホでは「共有」（Dropbox・Google ドライブ・OneDrive・メールなど）か「端末に保存」を選ぶ。PC はそのまま保存
+  //   content：文字か Uint8Array。戻り値：'share'／'save'／null（やめた）
+  function download(name, content, type) {
+    const blob = new Blob([content], { type });
+    let file = null;
+    try { file = new File([blob], name, { type }); } catch { /* 古いブラウザ */ }
+    const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+    const canShare = !!(file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] }));
+    if (!touch || !canShare) { saveLocal(blob, name); return Promise.resolve('save'); }
+    return new Promise(resolve => {
+      let r = null;
+      D.open({
+        title: 'ファイルの渡し方', width: 460,
+        body: h('div', {}, [h('p', { class: 'dlg-msg', text: name }),
+          h('p', { class: 'small', text: '「共有」を押すと、Dropbox・Google ドライブ・OneDrive・ファイル・メール・LINE など、スマホに入っているアプリへ渡せます。' })]),
+        buttons: [
+          { label: 'やめる' },
+          { label: '端末に保存', onClick: () => { saveLocal(blob, name); r = 'save'; } },
+          { label: '共有', kind: 'primary', onClick: async () => {
+            try { await navigator.share({ files: [file], title: name }); r = 'share'; }
+            catch (e) { if (e && e.name === 'AbortError') return false; saveLocal(blob, name); r = 'save'; toast('共有できなかったので、端末に保存しました'); }
+          } }
+        ],
+        onClose: () => resolve(r)
+      });
+    });
   }
   const today = () => new Date().toISOString().slice(0, 10);
   const safeName = s => String(s).replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
@@ -38,6 +65,7 @@
     state.shown = PAGE;
     render();
     for (const fn of hooks.points) await fn();
+    await checkBackup();
   }
   const hooks = { points: [], tab: [] };
 
@@ -88,8 +116,11 @@
   async function backupSites(all) {
     const data = await ST.exportSites(all ? null : [state.site.id]);
     const name = all ? '全部の現場' : safeName(state.site.name);
-    download('genba-' + name + '-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
+    const how = await download('genba-' + name + '-' + today() + '.json', JSON.stringify(data, null, 1), 'application/json');
+    if (!how) return;
     await ST.setMeta('lastBackup', new Date().toISOString());
+    await ST.setMeta('calcsSinceBackup', 0);
+    $('backupNote').hidden = true;
     toast('バックアップを書き出しました（' + data.sites.length + ' 現場）');
   }
   function restoreSites() {
@@ -159,12 +190,13 @@
     $('count').textContent = (state.q || state.kind ? list.length + ' 点 ／ 全 ' : '全 ') + state.points.length + ' 点';
     const ul = $('list'); ul.innerHTML = '';
     if (!list.length) ul.append(h('li', { class: 'none', text: state.points.length ? '見つかりません' : 'まだ点がありません。「＋ 追加」か「取り込み」で登録してください' }));
+    if (list.length) ul.append(h('li', { class: 'head', 'aria-hidden': 'true', html: '<span class="nm">点名</span><span class="kd">種類</span><span class="xy"><span>X（北）</span><span>Y（東）</span><span>Z</span></span><span class="memo">メモ</span>' }));
     const recent = new Set(state.recent.slice(0, 5));
     for (const p of list.slice(0, state.shown)) {
       const li = h('li', { 'data-id': p.id });
       li.innerHTML = '<span class="nm">' + (recent.has(p.id) && !state.q ? '🕘 ' : '') + hilite(p.name, state.q) + '</span><span class="kd">' + esc(p.kind) + '</span>'
-        + '<span class="xy">X ' + f3(p.x) + '　Y ' + f3(p.y) + (p.z != null ? '　Z ' + f3(p.z) : '') + '</span>'
-        + (p.memo ? '<span class="memo">' + esc(p.memo) + '</span>' : '');
+        + '<span class="xy"><span><i>X </i>' + f3(p.x) + '</span><span><i>Y </i>' + f3(p.y) + '</span><span>' + (p.z != null ? '<i>Z </i>' + f3(p.z) : '') + '</span></span>'
+        + '<span class="memo">' + esc(p.memo || '') + '</span>';
       ul.append(li);
     }
     $('more').hidden = list.length <= state.shown;
@@ -273,10 +305,42 @@
     });
   }
 
-  function exportCsv() {
+  // 書き出し：表示中の点（絞り込んでいればその点だけ）
+  let expMenu = null;
+  function exportMenu() {
+    if (expMenu) { expMenu.close(); expMenu = null; return; }
     const list = P.search(state.points, state.q, { kind: state.kind, sort: state.sort });
-    download(safeName(state.site.name) + '-座標-' + today() + '.csv', '﻿' + P.toCsv(list), 'text/csv');
-    toast(list.length + ' 点を CSV で書き出しました');
+    const what = (state.q || state.kind ? '表示中の ' : '全部の ') + list.length + ' 点';
+    expMenu = D.menu($('exp'), [
+      { note: what },
+      { label: 'CSV（Excel で開ける）', disabled: !list.length, onClick: () => guard(async () => {
+        if (await download(safeName(state.site.name) + '-座標-' + today() + '.csv', '\ufeff' + P.toCsv(list), 'text/csv')) toast(list.length + ' 点を CSV で書き出しました');
+      }) },
+      { label: 'SIMA（測量ソフト用・Shift_JIS）', disabled: !list.length, onClick: () => guard(async () => {
+        const r = P.encodeSjis(P.toSima(list, state.site.name));
+        if (await download(safeName(state.site.name) + '-座標-' + today() + '.sim', r.bytes, 'application/octet-stream'))
+          toast(list.length + ' 点を SIMA で書き出しました' + (r.lost ? '（Shift_JIS にない文字 ' + r.lost + ' 個は ? にしました）' : ''));
+      }) }
+    ]);
+    const close = expMenu.close; expMenu.close = () => { close(); expMenu = null; };
+    setTimeout(function watch() { if (expMenu && !document.querySelector('.menu')) expMenu = null; else if (expMenu) setTimeout(watch, 300); }, 300);
+  }
+
+  // バックアップのお知らせ：まだない、最後のバックアップから 7 日、または計算を 20 件保存したら
+  async function checkBackup() {
+    const note = $('backupNote');
+    if (state.dismissBackup || !state.sites.length) { note.hidden = true; return; }
+    let any = state.points.length > 0;
+    if (!any) for (const s of state.sites) { if ((await ST.listPoints(s.id)).length) { any = true; break; } }
+    if (!any) { note.hidden = true; return; }
+    const last = await ST.getMeta('lastBackup', null), n = await ST.getMeta('calcsSinceBackup', 0);
+    const days = last ? (Date.now() - new Date(last).getTime()) / 864e5 : Infinity;
+    let msg = '';
+    if (!last) msg = 'まだバックアップがありません。';
+    else if (days >= 7) msg = '最後のバックアップから ' + Math.floor(days) + ' 日たちました。';
+    else if (n >= 20) msg = 'バックアップのあと、計算を ' + n + ' 件保存しました。';
+    note.hidden = !msg;
+    $('backupMsg').textContent = msg + 'ブラウザのデータは消えることがあるので、ファイルにも残してください。';
   }
 
   // ---- 起動 ----
@@ -288,7 +352,9 @@
     $('sort').addEventListener('change', e => { state.sort = e.target.value; render(); });
     $('add').addEventListener('click', () => pointForm(null));
     $('imp').addEventListener('click', importForm);
-    $('exp').addEventListener('click', exportCsv);
+    $('exp').addEventListener('click', exportMenu);
+    $('backupNow').addEventListener('click', () => guard(() => backupSites(true)));
+    $('backupLater').addEventListener('click', () => { state.dismissBackup = true; $('backupNote').hidden = true; });
     $('more').addEventListener('click', () => { state.shown += PAGE; render(); });
     $('list').addEventListener('click', e => {
       const li = e.target.closest('li[data-id]'); if (!li) return;
@@ -310,7 +376,7 @@
     await ST.setMeta('recent:' + state.site.id, state.recent);
   }
   // 測設・履歴（genba-calc.js）から使う
-  window.FxGenba = { state, hooks, toast, guard, download, esc, f3, today, safeName, loadPoints, pickFile, showTab, useRecent, siteMenu: () => siteMenu() };
+  window.FxGenba = { state, hooks, toast, guard, download, esc, f3, today, safeName, loadPoints, pickFile, showTab, useRecent, checkBackup, siteMenu: () => siteMenu() };
   bind();
   document.addEventListener('DOMContentLoaded', () => guard(async () => { await ST.persist(); await loadSites(); }));
   window.__genba = state;   // 確かめ用

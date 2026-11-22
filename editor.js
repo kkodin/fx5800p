@@ -272,6 +272,25 @@
   }
   // CcEditor と同じ UTF-8（BOM付き）・CRLF
   const exportOne = p => download(p.name + '.txt', '﻿' + p.source.replace(/\r?\n/g, '\r\n'));
+  // 全部を txt にして zip 1 つにまとめる（ファイルがたくさん落ちてこないように）
+  function exportAllZip() {
+    saveNow();
+    if (!programs.length) { toast('プログラムがありません'); return; }
+    const used = new Set();
+    const files = programs.map(p => {
+      let n = p.name.replace(/[<>:"/\|?*]/g, '_') || 'NONAME', k = 2;
+      const base = n;
+      while (used.has(n.toUpperCase())) n = base + '_' + k++;
+      used.add(n.toUpperCase());
+      return { name: n + '.txt', data: '﻿' + p.source.replace(/\r?\n/g, '\r\n') };
+    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(FxZip.make(files));
+    a.download = 'fx5800p-programs-' + new Date().toISOString().slice(0, 10) + '.zip';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(programs.length + ' 本を zip にまとめて書き出しました');
+  }
   async function readText(f) {
     const buf = await f.arrayBuffer();
     try { return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^﻿/, ''); }
@@ -399,7 +418,7 @@
     $('bCheck').onclick = () => check(false);
     $('bRun').onclick = runInCalc;
     $('bExport').onclick = () => { if (cur) { saveNow(); exportOne(cur.p); } };
-    $('bExportAll').onclick = () => { saveNow(); programs.forEach((p, i) => setTimeout(() => exportOne(p), i * 250)); toast(programs.length + ' 本を書き出します'); };
+    $('bExportAll').onclick = exportAllZip;
     $('bKeys').onclick = () => renderPalette('keys');
     $('pName').onchange = rename;
     $('pName').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('src').focus(); } };
@@ -424,5 +443,34 @@
       if (p2.toString()) history.replaceState(null, '', location.pathname);
     });
   }
-  window.addEventListener('DOMContentLoaded', init);
+  // ---- 文字の大きさ（Ctrl＋ホイール・Ctrl＋0） ----
+  const FS_DEF = 15, FS_MIN = 10, FS_MAX = 32;
+  let fontSize = FS_DEF;
+  function setFont(n, quiet) {
+    fontSize = Math.min(FS_MAX, Math.max(FS_MIN, Math.round(n)));
+    document.documentElement.style.setProperty('--code-size', fontSize + 'px');
+    charW = 0; hideAC(); syncScroll();
+    $('fsz').textContent = '文字 ' + fontSize + 'px';
+    try { localStorage.setItem(KEY + '-editor-font', String(fontSize)); } catch { /* 無視 */ }
+    if (!quiet) toast('文字の大きさ ' + fontSize + 'px');
+  }
+  function bindFont() {
+    let saved = NaN; try { saved = Number(localStorage.getItem(KEY + '-editor-font')); } catch { /* 無視 */ }
+    setFont(Number.isFinite(saved) && saved ? saved : FS_DEF, true);
+    // ブラウザ全体の拡大は止めて、プログラムの欄だけを大きくする
+    $('codeWrap').addEventListener('wheel', e => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setFont(fontSize + (e.deltaY < 0 ? 2 : -2));
+    }, { passive: false });
+    document.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (!e.target.closest || !e.target.closest('#codeWrap')) return;
+      if (e.key === '0') { e.preventDefault(); setFont(FS_DEF); }
+      else if (e.key === '+' || e.key === '=' || e.key === ';') { e.preventDefault(); setFont(fontSize + 2); }
+      else if (e.key === '-') { e.preventDefault(); setFont(fontSize - 2); }
+    }, true);
+    $('fsz').addEventListener('click', () => setFont(FS_DEF));
+  }
+  window.addEventListener('DOMContentLoaded', () => { bindFont(); init(); });
 })();

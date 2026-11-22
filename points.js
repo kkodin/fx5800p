@@ -188,5 +188,41 @@
   }
   const fix = v => Number(v).toFixed(4).replace(/0$/, '');
 
-  root.FxPoints = { KINDS, NAME_MAX, normKey, digitRuns, compareName, search, range, decode, parseText, plan, toCsv, num };
+  // ---- SIMA の書き出し（Shift_JIS） ----
+  let sjisMap = null;
+  // ブラウザの Shift_JIS の読み取りを逆に使って、文字 → バイト列の表を作る
+  function buildSjis() {
+    sjisMap = new Map();
+    const dec = new TextDecoder('shift_jis');
+    for (let b = 0xA1; b <= 0xDF; b++) sjisMap.set(dec.decode(new Uint8Array([b])), [b]);
+    for (let a = 0x81; a <= 0xFC; a++) {
+      if (a > 0x9F && a < 0xE0) continue;
+      for (let b = 0x40; b <= 0xFC; b++) {
+        if (b === 0x7F) continue;
+        const ch = dec.decode(new Uint8Array([a, b]));
+        if (ch.length === 1 && ch !== '�' && !sjisMap.has(ch)) sjisMap.set(ch, [a, b]);
+      }
+    }
+  }
+  // 文字列 → Shift_JIS のバイト列。表にない文字は「?」にして数を返す
+  function encodeSjis(str) {
+    if (!sjisMap) buildSjis();
+    const out = []; let lost = 0;
+    for (const ch of String(str)) {
+      const c = ch.charCodeAt(0);
+      if (ch.length === 1 && c < 0x80) { out.push(c); continue; }
+      const m = sjisMap.get(ch);
+      if (m) out.push(...m); else { out.push(0x3F); lost++; }
+    }
+    return { bytes: new Uint8Array(out), lost };
+  }
+  function toSima(points, title) {
+    const clean = s => String(s == null ? '' : s).replace(/[,\r\n]/g, ' ').trim();
+    const lines = ['G00,01,' + clean(title) + ',', 'Z00,座標ﾃﾞｰﾀ,', 'A00,'];
+    points.forEach((p, i) => lines.push(['A01', i + 1, clean(p.name), fix(p.x), fix(p.y), p.z == null ? '' : fix(p.z), ''].join(',')));
+    lines.push('A99,');
+    return lines.join('\r\n') + '\r\n';
+  }
+
+  root.FxPoints = { KINDS, NAME_MAX, normKey, digitRuns, compareName, search, range, decode, parseText, plan, toCsv, num, encodeSjis, toSima };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
