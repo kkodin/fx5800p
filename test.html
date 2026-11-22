@@ -254,6 +254,49 @@
     return shown.map(s => String(s).trim()).join('|');
   });
 
+  // ---- 実機用の一式（NINI・HADI・OBXY・KANSOKU） ----
+  const SET = SK.calcPrograms();
+  const runCalc = (name, inputs) => {
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const shown = [], io = { print: t => shown.push(String(t).trim()), printValue: t => shown.push(String(t).trim()), locate() {}, cls() {} };
+    const g = FxBasic.run(SET.find(p => p.name === name), { vars, io, library: SET });
+    let r = g.next(), n = 0;
+    while (!r.done && n++ < 400) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+    return { shown, vars };
+  };
+  test('一式：全部 .ccl にできる', '', () => SET.map(p => CC.toCcl(p).problems.map(x => p.name + ':' + x.msg).join('／')).join(''));
+  test('一式：文法チェック', true, () => SET.every(p => FxBasic.check(p.source)));
+  test('一式：全部で 1,000 バイト以下', true, () => SET.reduce((s, p) => s + CC.toCcl(p).size, 0) <= 1000);
+  // 既知点 2 点（例題）：器械点 1020・2040、No.1 は 161-33-56 前後・14.142
+  test('NINI：既知点 2 点・高さなし', 'OX|1020.000|OY|2040.000|HD|14.142', () => {
+    const r = runCalc('NINI', ['0', '2', '1000', '2000', '0', '44.721', '1050', '2080', '169°41°43°', '50', '1030', '2050']);
+    const i = r.shown.indexOf('OX'); return r.shown.slice(i, i + 4).concat(r.shown.slice(-2)).join('|');
+  });
+  // 既知点 3 点・高さあり（誤差のない観測値をこの場で作る）：器械点 (1020,2040)、地盤高 10.000、器械高 1.5、ターゲット高 1.8
+  test('NINI：既知点 3 点・高さあり', 'OX|1020.000|OY|2040.000|OZ|10.000|HD|14.142|VD|0.800', () => {
+    const T0 = { x: 1020, y: 2040 }, ks = [{ x: 1000, y: 2000, z: 11.2 }, { x: 1050, y: 2080, z: 9.6 }, { x: 990, y: 2060, z: 10.4 }];
+    const zero = G.azimuth(T0, ks[0]) - 25;   // 器械の 0 方向を既知点1から 25° ずらす（0 セットしていない場合）
+    const inp = ['1', '1.5', '1.8', '3'];
+    for (const k of ks) inp.push(String(k.x), String(k.y), String(A.norm360(G.azimuth(T0, k) - zero)), String(G.dist(T0, k)), String(k.z), String((k.z + 1.8) - (10 + 1.5)));
+    inp.push('1030', '2050', '10.5');
+    const r = runCalc('NINI', inp);
+    const i = r.shown.indexOf('OX'); return r.shown.slice(i, i + 6).concat(r.shown.slice(-4, -2), r.shown.slice(-2)).join('|');
+  });
+  test('NINI：RMS（誤差なしなら 0）・縮尺 1', 'SCALE|1.000|RMS(MM)|0.000', () => {
+    const T0 = { x: 1020, y: 2040 }, ks = [{ x: 1000, y: 2000 }, { x: 1050, y: 2080 }, { x: 990, y: 2060 }];
+    const inp = ['0', '3']; for (const k of ks) inp.push(String(k.x), String(k.y), String(G.azimuth(T0, k)), String(G.dist(T0, k)));
+    const r = runCalc('NINI', inp); const i = r.shown.indexOf('SCALE'); return r.shown.slice(i, i + 4).join('|');
+  });
+  test('KANSOKU：観測から座標（OBXY）', 'X|1030.000|Y|2050.000', () => {
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    Object.assign(vars, { U: 1020, V: 2040, W: 0 });
+    const shown = [], io = { print: t => shown.push(String(t).trim()), printValue: t => shown.push(String(t).trim()), locate() {}, cls() {} };
+    const g = FxBasic.run(SET.find(p => p.name === 'KANSOKU'), { vars, io, library: SET });
+    const inputs = ['45', String(Math.hypot(10, 10))]; let r = g.next(), n = 0;
+    while (!r.done && n++ < 50) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+    return shown.join('|');
+  });
+
   // ---- 図（plot.js） ----
   const PL = FxPlot;
   const pp = [

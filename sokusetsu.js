@@ -120,5 +120,76 @@
     return { name: 'SOKUSETU', mode: 'COMP', source };
   }
 
-  root.FxSokusetsu = { compute, snapshot, historyCsv, readNum, readObs, calcProgram };
+  // ---- 実機用のプログラム一式（既知点 N 点・高さ付き、SUB を共有） ----
+  //   変数の決まり（ほかのプログラムとも合わせる）：
+  //     U・V＝器械点 X・Y、W＝器械の 0 方向の方向角、X・Y＝いまの測点、S＝器械点の地盤高
+  //     R＝器械高、T＝ターゲット高、O＝高さを使う（1）／使わない（0）
+  //     I・J は Pol(・Rec( が書き換えるので、値を残す用には使わない
+  //   NINI（本体）：既知点を N 点観測して器械点を求め（最小二乗・縮尺 1）、測点ごとに HA・HD（と VD）を出す
+  //   HADI（SUB）：器械点 U・V、0 方向 W から、測点 X・Y への HA・HD を表示（ほかの測設プログラムでも使う）
+  //   OBXY（SUB）：器械点 U・V、0 方向 W と、観測 H（角）・L（距離）から X・Y を出す（KAIHOU 型の計算に使う）
+  //   KANSOKU：NINI のあとで、観測した点の座標を出す（OBXY を使う）
+  function calcPrograms() {
+    const nini = [
+      'Deg:Fix 3',
+      '"Z 1/0"?→O',
+      'If O=1:Then "HI"?→R:"HT"?→T:IfEnd',
+      '"N"?→N',
+      '0→A:0→B:0→C:0→D:0→E:0→F:0→G:0→M:0→S',
+      'For 1→K To N',
+      '"KX"?→P:"KY"?→Q',
+      // 桁落ちを防ぐため、1 点目の既知点を原点にずらして足し合わせる（U・V に一時的に入れておく）
+      'If K=1:Then P→U:Q→V:IfEnd',
+      'P-U→P:Q-V→Q',
+      '"HA"?→H:"HD"?→L',
+      'Rec(L,H)',
+      'A+I→A:B+J→B:C+P→C:D+Q→D',
+      'E+I×P+J×Q→E:F+I×Q-J×P→F',
+      'G+I²+J²→G:M+P²+Q²→M',
+      'If O=1:Then "KZ"?→Z:"VD"?→H:S+Z+T-H-R→S:IfEnd',
+      'Next',
+      'E-(A×C+B×D)÷N→E',
+      'F-(A×D-B×C)÷N→F',
+      'G-(A²+B²)÷N→G',
+      'M-(C²+D²)÷N→M',
+      'Pol(E,F):J→W',
+      '"SCALE":I÷G◢',
+      '"RMS(MM)":√(Abs(M+G-2I)÷(2N-3))×1000◢',
+      'Pol(A,B):Rec(I,J+W)',
+      '(C-I)÷N+U→U:(D-J)÷N+V→V',
+      '"OX":U◢',
+      '"OY":V◢',
+      'If O=1:Then S÷N→S:"OZ":S◢IfEnd',
+      'Lbl 1',
+      '"PX"?→X:"PY"?→Y',
+      'Prog "HADI"',
+      'If O=1:Then "PZ"?→Z:"VD":Z+T-S-R◢IfEnd',
+      'Goto 1'
+    ].join('\n');
+    const hadi = [
+      'Pol(X-U,Y-V)',
+      'J-W→K',
+      'If K<0:Then K+360→K:IfEnd',
+      '"HA":K▸DMS◢',
+      '"HD":I◢'
+    ].join('\n');
+    const obxy = 'Rec(L,H+W):U+I→X:V+J→Y';
+    const kansoku = [
+      'Deg:Fix 3',
+      'Lbl 2',
+      '"HA"?→H:"HD"?→L',
+      'Prog "OBXY"',
+      '"X":X◢',
+      '"Y":Y◢',
+      'Goto 2'
+    ].join('\n');
+    return [
+      { name: 'NINI', mode: 'COMP', source: nini, title: '任意点設置と測設（既知点 N 点・高さ）', uses: 'A〜I・J・K・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z（全部）' },
+      { name: 'HADI', mode: 'COMP', source: hadi, title: 'SUB：測点への角度と距離', uses: '読む U・V・W・X・Y／書く I・J・K' },
+      { name: 'OBXY', mode: 'COMP', source: obxy, title: 'SUB：観測から座標', uses: '読む U・V・W・H・L／書く I・J・X・Y' },
+      { name: 'KANSOKU', mode: 'COMP', source: kansoku, title: '観測した点の座標（NINI のあと）', uses: '読む U・V・W／書く H・L・I・J・X・Y' }
+    ];
+  }
+
+  root.FxSokusetsu = { compute, snapshot, historyCsv, readNum, readObs, calcProgram, calcPrograms };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -399,20 +399,26 @@
 
   // ---- 電卓（実機）用の測設プログラム ----
   function calcProgramForm() {
-    const prog = SK.calcProgram(), r = FxCcl.toCcl(prog);
-    const pre = h('pre', { class: 'prog-src', text: prog.source });
+    const set = SK.calcPrograms(), res = set.map(p => ({ p, r: FxCcl.toCcl(p) }));
+    const total = res.reduce((s, x) => s + x.r.size, 0);
+    const rows = res.map(x => '<tr><td><b>' + esc(x.p.name) + '</b></td><td>' + esc(x.p.title) + '</td><td class="n">' + x.r.size + '</td><td class="small">' + esc(x.p.uses) + '</td></tr>').join('');
+    const pre = h('pre', { class: 'prog-src', text: set.map(p => '■ ' + p.name + '（' + p.title + '）\n' + p.source).join('\n\n') });
     D.open({
-      title: '電卓用の測設プログラム「' + prog.name + '」', width: 620,
+      title: '電卓（実機）用の測設プログラム', width: 680,
       body: h('div', { class: 'prog-box' }, [
-        h('p', { text: 'アプリの測設と同じ計算をする、fx-5800P 用のプログラムです（' + r.size + ' バイト）。電卓では点名が使えないので、座標と観測値はその場で打ち込みます。' }),
+        h('p', { text: 'アプリの測設と同じ計算をする fx-5800P 用のプログラム一式です（全部で ' + total + ' バイト）。共通の部分は SUB（HADI・OBXY）にして、ほかのプログラムからも呼べるようにしています。' }),
+        h('div', { class: 'tbl-wrap', html: '<table class="tbl"><thead><tr><th>名前</th><th>内容</th><th>バイト</th><th>使う変数</th></tr></thead><tbody>' + rows + '</tbody></table>' }),
+        h('p', { class: 'small', text: 'NINI の使い方' }),
         h('ol', { class: 'small' }, [
-          h('li', { text: 'K1X・K1Y・K2X・K2Y：既知点1・2 の座標' }),
-          h('li', { text: 'H1・S1・H2・S2：既知点1・2 の水平角（°′″ キーで 169°41°43° のように）と水平距離' }),
-          h('li', { text: 'DIFF(MM)：既知点間の距離の差（mm）、OX・OY：器械点' }),
-          h('li', { text: 'PX・PY に測点の座標を入れるたびに、HA（既知点1を 0 にした水平角）と HD（水平距離）が出ます。AC で終わり' })
+          h('li', { text: 'Z 1/0：高さも出すなら 1（HI＝器械高、HT＝ターゲット高を聞きます）' }),
+          h('li', { text: 'N：見る既知点の数（2 点以上）。既知点ごとに KX・KY（座標）、HA（水平角、°′″ キーで）、HD（水平距離）。高さありなら KZ（既知点の標高）、VD（高低差）' }),
+          h('li', { text: 'SCALE（1 に近いほどよい）、RMS(MM)（観測のばらつき）、OX・OY（器械点）、OZ（器械点の地盤高）が出ます' }),
+          h('li', { text: 'PX・PY に測点の座標を入れるたびに HA・HD が出ます。高さありなら PZ（計画高）を入れると、合わせる VD が出ます。AC で終わり' }),
+          h('li', { text: 'KANSOKU：NINI のあとで、HA・HD を入れると、その点の座標 X・Y を出します' })
         ]),
+        h('p', { class: 'small warn', text: '⚠ NINI は A〜Z の変数を全部使います。KAIHOU などほかのプログラムの値（A〜D の後視点・機械点など）は書き換わります。' }),
         pre,
-        h('p', { class: 'small', text: '.ccl は CcLinker で電卓へ送れる形式です。手元の電卓から吸い出した 11 本で形式を確かめましたが、このプログラムを実機へ送って動かすのは、まだ確かめていません。' })
+        h('p', { class: 'small', text: '.ccl は CcLinker で電卓へ送れる形式です。手元の電卓から吸い出した 11 本で形式を確かめましたが、このプログラムを実機へ送って動かすのは、まだ確かめていません。SUB（HADI・OBXY）も一緒に送ってください。' })
       ]),
       buttons: [
         { label: '閉じる' },
@@ -421,16 +427,22 @@
             const KEY = 'fx5800p-emu-v1';
             const d = JSON.parse(localStorage.getItem(KEY) || '{}');
             d.programs = Array.isArray(d.programs) ? d.programs : [];
-            const i = d.programs.findIndex(p => p.name === prog.name);
-            if (i >= 0) d.programs[i] = prog; else d.programs.push(prog);
+            for (const p of set) {
+              const item = { name: p.name, mode: 'COMP', source: p.source };
+              const i = d.programs.findIndex(x => x.name === p.name);
+              if (i >= 0) d.programs[i] = item; else d.programs.push(item);
+            }
             localStorage.setItem(KEY, JSON.stringify(d));
-            toast('電卓アプリに「' + prog.name + '」を入れました（MODE → PROG → RUN）');
+            toast('電卓アプリに ' + set.map(p => p.name).join('・') + ' を入れました（MODE → PROG → RUN → NINI）');
           } catch (e) { toast('入れられませんでした：' + e.message); return false; }
+          return false;
         } },
-        { label: '.ccl を書き出す', kind: 'primary', onClick: async () => {
-          if (!r.ok) { toast('書き出せません：' + r.problems.map(x => x.msg).join('／')); return false; }
-          const how = await GB.download(r.fileName, r.bytes, 'application/octet-stream');
-          if (how) toast(r.fileName + ' を書き出しました');
+        { label: '.ccl をまとめて書き出す（zip）', kind: 'primary', onClick: async () => {
+          const ng = res.filter(x => !x.r.ok);
+          if (ng.length) { toast('書き出せません：' + ng.map(x => x.p.name + ' ' + x.r.problems.map(q => q.msg).join('／')).join('、')); return false; }
+          const zip = FxZip.make(res.map(x => ({ name: x.r.fileName, data: x.r.bytes })).concat([{ name: 'NINI一式の説明.txt', data: '﻿' + set.map(p => p.name + '：' + p.title + '\r\n使う変数：' + p.uses + '\r\n' + p.source.replace(/\n/g, '\r\n')).join('\r\n\r\n') }]));
+          const how = await GB.download('NINI一式-' + GB.today() + '.zip', new Uint8Array(await zip.arrayBuffer()), 'application/zip');
+          if (how) toast('NINI 一式（' + set.length + ' 本）を書き出しました');
           return false;
         } }
       ]
