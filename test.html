@@ -20,6 +20,10 @@
 <script src="sokusetsu.js"></script>
 <script src="plot.js"></script>
 <script src="zip.js"></script>
+<script src="import.js"></script>
+<script src="cclwrite.js"></script>
+<script src="engine.js"></script>
+<script src="basic.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -217,6 +221,37 @@
     // Blob を同期で読めないので、作る前のデータで確かめる
     const b = FxZip.make([{ name: 'A.txt', data: 'abc' }, { name: '日本.txt', data: new Uint8Array([1, 2]) }]);
     return (b.size === 30 + 5 + 3 + 30 + 10 + 2 + 46 + 5 + 46 + 10 + 22 ? 'PK' : 'size ' + b.size) + '|2';
+  });
+
+  // ---- 電卓用の書き出し（cclwrite.js）と電卓版の測設プログラム ----
+  const CC = FxCcl;
+  test('.ccl：SUB2 と同じバイト列', '2a 01 32 35', () => hex(CC.toCcl({ name: 'SUB2', mode: 'COMP', source: 'C→A:D→B:X→C:Y→D' }).bytes.slice(0, 4)));
+  test('.ccl：SUB2 の検査値', 'C0|7D', () => { const b = CC.toCcl({ name: 'SUB2', mode: 'COMP', source: 'C→A:D→B:X→C:Y→D' }).bytes; return String.fromCharCode(b[41], b[42]) + '|' + String.fromCharCode(b[b.length - 2], b[b.length - 1]); });
+  test('.ccl：ファイル名', 'SUB2 COMP 0010.ccl', () => CC.toCcl({ name: 'SUB2', mode: 'COMP', source: 'C→A:D→B:X→C:Y→D' }).fileName);
+  test('.ccl：引き算と負の記号', '87 31 99 32 22 87 41 22', () => hex(CC.encode('-1-2"-A"').bytes));
+  test('.ccl：文字列の中の θ と外の θ', '22 e6 47 22 ce', () => hex(CC.encode('"θ"θ').bytes));
+  test('.ccl：行の終わりの Then', 'f7 01 0d 41', () => hex(CC.encode('Then\nA').bytes));
+  test('.ccl：To・Step', 'f7 04 31 0e 49 f7 05 4e f7 06 32', () => hex(CC.encode('For 1→I To N Step 2').bytes));
+  test('.ccl：日本語は書き出せない', true, () => !CC.toCcl({ name: 'A', source: '"距離"?→A' }).ok);
+  test('.ccl：表にない命令は書き出せない', '「DimZ」', () => (CC.encode('DimZ 5').problems[0] || { msg: '' }).msg.slice(0, 6));
+  test('.ccl：名前は英大文字', false, () => CC.toCcl({ name: 'abc', source: '1' }).ok);
+  test('.ccl：呼び出し先がないと注意', 'warn', () => CC.check([{ name: 'A', source: 'Prog "B"' }]).list[0].problems[0].level);
+  test('.cce：書いて読み直すと同じ', true, () => { const p = { name: 'KAIHOU', source: '"-FX-":X◢J+D→Y\n?→K:K=0⇒Prog "SUB2"\n"θ"?H' }; return FxImport.decodeCce(new TextEncoder().encode(CC.toCce(p).text).buffer, 'KAIHOU.cce').source === p.source; });
+  const SP = SK.calcProgram();
+  test('電卓版の測設：全部 .ccl にできる', '', () => CC.toCcl(SP).problems.map(p => p.msg).join('／'));
+  test('電卓版の測設：文法チェック', true, () => FxBasic.check(SP.source));
+  // 電卓の画面と同じ実行部分で動かす（例題：K1・K2、観測 0-00-00/44.721、169-41-43/50、測点 No.1）
+  // 答えはアプリの測設と同じ（既知点間の差 -0.3 mm、No.1 は 161-33-56・14.142。丸めた観測値なので 161-33-54 から 2 秒ずれる）
+  test('電卓版の測設：例題の答え', 'DIFF(MM)|-0.349|OX|1020.000|OY|2040.000|HA|161°33\'55.9936"|HD|14.142', () => {
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const shown = [], io = { print: t => shown.push(t), printValue: t => shown.push(t), locate() {}, cls() {} };
+    const inputs = ['1000', '2000', '1050', '2080', '0', '44.721', '169°41°43°', '50', '1030', '2050'];
+    const g = FxBasic.run(SP, { vars, io });
+    let r = g.next(), guard = 0;
+    while (!r.done && guard++ < 100) {
+      if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next();
+    }
+    return shown.map(s => String(s).trim()).join('|');
   });
 
   // ---- 図（plot.js） ----

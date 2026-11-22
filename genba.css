@@ -207,6 +207,10 @@ input.t-name { flex: 1; min-height: 34px; padding: 2px 8px; }
 .add-bar button { flex: 1; }
 .memo { width: 100%; margin: 6px 0; }
 .save-bar { margin-top: 8px; }
+.calc-prog { justify-content: center; margin-top: 16px; }
+.prog-box p { margin: 0 0 8px; }
+.prog-box ol { margin: 0 0 8px; padding-left: 1.4em; }
+.prog-src { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; max-height: 40vh; overflow: auto; overscroll-behavior: contain; margin: 0 0 8px; }
 .list .kd.ok { background: none; color: var(--ok); border: 1px solid var(--ok); }
 .list .kd.ng { background: none; color: var(--danger); border: 1px solid var(--danger); }
 .hist-detail p { margin: 6px 0; }

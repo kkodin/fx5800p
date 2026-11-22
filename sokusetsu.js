@@ -88,5 +88,37 @@
     return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
   }
 
-  root.FxSokusetsu = { compute, snapshot, historyCsv, readNum, readObs };
+  // 電卓（実機 fx-5800P）版の測設プログラム。アプリの測設と同じ計算をする
+  //   入力：既知点1・2 の X・Y、既知点1・2 の水平角（°′″ キーで入れる）・水平距離
+  //   出力：既知点間の差（mm）、器械点 X・Y。そのあと測点の X・Y を入れるたびに水平角（既知点1を 0）と水平距離
+  //   変数：A〜D 既知点、E〜H 観測、M〜P 器械から見た既知点、Q・T 角、R・S 距離、U・V 器械点、W 既知点1の方向、X・Y 測点、L・Z 答え
+  function calcProgram() {
+    const source = [
+      'Deg:Fix 3',
+      '"K1X"?→A:"K1Y"?→B',
+      '"K2X"?→C:"K2Y"?→D',
+      '"H1"?→E:"S1"?→F',
+      '"H2"?→G:"S2"?→H',
+      'Rec(F,E):I→M:J→N',
+      'Rec(H,G):I→O:J→P',
+      'Pol(C-A,D-B):I→R:J→Q',
+      'Pol(O-M,P-N):I→S:Q-J→T',
+      '"DIFF(MM)":(S-R)×1000◢',
+      'Rec(F,E+T):A-I→U:B-J→V',
+      'Rec(H,G+T):(U+C-I)÷2→U:(V+D-J)÷2→V',
+      '"OX":U◢',
+      '"OY":V◢',
+      'Pol(A-U,B-V):J→W',
+      'Lbl 1',
+      '"PX"?→X:"PY"?→Y',
+      'Pol(X-U,Y-V):I→L:J-W→Z',
+      'If Z<0:Then Z+360→Z:IfEnd',
+      '"HA":Z▸DMS◢',
+      '"HD":L◢',
+      'Goto 1'
+    ].join('\n');
+    return { name: 'SOKUSETU', mode: 'COMP', source };
+  }
+
+  root.FxSokusetsu = { compute, snapshot, historyCsv, readNum, readObs, calcProgram };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

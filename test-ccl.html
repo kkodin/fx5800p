@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>電卓形式の試験</title>
+<style>
+  :root { --bg: #fff; --fg: #1b1c1f; --ok: #1a7f37; --ng: #c62828; --line: #ddd; --sub: #5f6368; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b1c1f; --fg: #e8e8e8; --ok: #5cc879; --ng: #ff7b72; --line: #333; --sub: #9aa0a6; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  p { color: var(--sub); }
+  #sum { font-size: 16px; font-weight: bold; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; word-break: break-all; }
+  .ok { color: var(--ok); } .ng { color: var(--ng); font-weight: bold; }
+  pre { margin: 0; white-space: pre-wrap; font-size: 12px; }
+</style>
+<script src="import.js"></script>
+<script src="points.js"></script>
+<script src="cclwrite.js"></script>
+</head>
+<body>
+<h1>電卓形式（.ccl）の書き出しの試験</h1>
+<p>CcLinker で電卓から吸い出した .ccl を選ぶと、アプリで読み込んでから書き出し直し、元のファイルと 1 バイトも違わないかを確かめます。ファイルはこの端末の中だけで読み、どこにも送りません。</p>
+<input type="file" id="files" multiple accept=".ccl">
+<div id="sum"></div>
+<table><thead><tr><th>結果</th><th>ファイル</th><th>大きさ</th><th>違い・注意</th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+(function () {
+  'use strict';
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const hex = a => Array.from(a, b => b.toString(16).padStart(2, '0')).join(' ');
+  // 元のバイト列と、読み込み→書き出しのバイト列を比べる
+  async function roundTrip(name, buf) {
+    const orig = new Uint8Array(buf);
+    const dec = FxImport.decodeCcl(buf);
+    const r = FxCcl.toCcl({ name: dec.name, mode: dec.mode, source: dec.source, tail: dec.tail });
+    let diff = -1;
+    for (let i = 0; i < Math.max(orig.length, r.bytes.length); i++) if (orig[i] !== r.bytes[i]) { diff = i; break; }
+    return {
+      file: name, ok: diff < 0 && !dec.unknown, size: r.size, unknown: dec.unknown,
+      note: diff < 0 ? (dec.unknown ? '読めない記号 ' + dec.unknown : '') : diff + ' バイト目から違う\n元　 ' + hex(orig.slice(Math.max(0, diff - 4), diff + 12)) + '\n書出 ' + hex(r.bytes.slice(Math.max(0, diff - 4), diff + 12)),
+      problems: r.problems
+    };
+  }
+  async function run(list) {
+    const rows = [];
+    for (const [name, buf] of list) { try { rows.push(await roundTrip(name, buf)); } catch (e) { rows.push({ file: name, ok: false, note: 'エラー：' + e.message, problems: [] }); } }
+    const ng = rows.filter(r => !r.ok).length;
+    document.getElementById('sum').innerHTML = ng ? '<span class="ng">✗ ' + ng + ' 本が元と違う</span>（全 ' + rows.length + ' 本）' : '<span class="ok">✓ 全 ' + rows.length + ' 本が元と 1 バイトも違わない</span>';
+    document.getElementById('rows').innerHTML = rows.map(r => '<tr><td class="' + (r.ok ? 'ok">✓' : 'ng">✗') + '</td><td>' + esc(r.file) + '</td><td>' + (r.size || '') + '</td><td><pre>' + esc(r.note + (r.problems.length ? '\n' + r.problems.map(p => p.msg).join('\n') : '')) + '</pre></td></tr>').join('');
+    window.CCL_RESULT = { total: rows.length, ng, rows };
+  }
+  document.getElementById('files').addEventListener('change', async e => {
+    const list = [];
+    for (const f of e.target.files) list.push([f.name, await f.arrayBuffer()]);
+    run(list);
+  });
+  window.runCclTest = run;
+})();
+</script>
+</body>
+</html>

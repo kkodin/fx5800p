@@ -61,7 +61,9 @@
       if (c >= 0x20 && c < 0x7f) { s += String.fromCharCode(c); continue; }
       s += '{' + hex(c) + '}'; unknown++;
     }
-    return { name, mode: /FORM|FMLA/i.test(modeText) ? 'Formula' : 'COMP', source: tidy(s), unknown, modeText };
+    // 最後の空の改行の数（読むと消えるので、書き出し直すときのために覚えておく）
+    const tail = (s.match(/\n+$/) || [''])[0].length;
+    return { name, mode: /FORM|FMLA/i.test(modeText) ? 'Formula' : 'COMP', source: tidy(s), unknown, modeText, tail };
   }
   const hex = n => n.toString(16).toUpperCase().padStart(2, '0');
   // 命令の後ろの余分な空白を整える
@@ -129,5 +131,5 @@
     return null;
   }
 
-  root.FxImport = { decodeCcl, decodeCce, decodeFile, normalizeGlyphs };
+  root.FxImport = { decodeCcl, decodeCce, decodeFile, normalizeGlyphs, T1, T2 };   // T1・T2 は書き出し（cclwrite.js）でも使う
 })(typeof globalThis !== 'undefined' ? globalThis : window);

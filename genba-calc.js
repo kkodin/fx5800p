@@ -196,6 +196,9 @@
       h('div', { class: 'bar save-bar' }, [
         h('button', { type: 'button', id: 'cNew', text: '新しい計算' }), h('span', { class: 'grow' }),
         h('button', { type: 'button', id: 'cSave', class: 'primary big', text: '履歴に保存' })
+      ]),
+      h('div', { class: 'bar calc-prog' }, [
+        h('button', { type: 'button', id: 'cProg', class: 'mini', text: '🖩 電卓（実機）用の測設プログラム' })
       ])
     );
     pv.plot = FxPlot.create($('cPlot'), { mode: pv.mode, origin: 'st', label: '既知点・器械点・測点の図' });
@@ -379,6 +382,7 @@
           calc = blank(); renderCalc(); saveDraft(); break;
         }
         case 'cSettings': await settingsForm(); break;
+        case 'cProg': calcProgramForm(); break;
       }
     }));
   }
@@ -391,6 +395,46 @@
     await ST.setMeta('calcsSinceBackup', (await ST.getMeta('calcsSinceBackup', 0)) + 1);
     GB.checkBackup();
     if (state.tab === 'hist') renderHist();
+  }
+
+  // ---- 電卓（実機）用の測設プログラム ----
+  function calcProgramForm() {
+    const prog = SK.calcProgram(), r = FxCcl.toCcl(prog);
+    const pre = h('pre', { class: 'prog-src', text: prog.source });
+    D.open({
+      title: '電卓用の測設プログラム「' + prog.name + '」', width: 620,
+      body: h('div', { class: 'prog-box' }, [
+        h('p', { text: 'アプリの測設と同じ計算をする、fx-5800P 用のプログラムです（' + r.size + ' バイト）。電卓では点名が使えないので、座標と観測値はその場で打ち込みます。' }),
+        h('ol', { class: 'small' }, [
+          h('li', { text: 'K1X・K1Y・K2X・K2Y：既知点1・2 の座標' }),
+          h('li', { text: 'H1・S1・H2・S2：既知点1・2 の水平角（°′″ キーで 169°41°43° のように）と水平距離' }),
+          h('li', { text: 'DIFF(MM)：既知点間の距離の差（mm）、OX・OY：器械点' }),
+          h('li', { text: 'PX・PY に測点の座標を入れるたびに、HA（既知点1を 0 にした水平角）と HD（水平距離）が出ます。AC で終わり' })
+        ]),
+        pre,
+        h('p', { class: 'small', text: '.ccl は CcLinker で電卓へ送れる形式です。手元の電卓から吸い出した 11 本で形式を確かめましたが、このプログラムを実機へ送って動かすのは、まだ確かめていません。' })
+      ]),
+      buttons: [
+        { label: '閉じる' },
+        { label: '電卓アプリに入れる', onClick: () => {
+          try {
+            const KEY = 'fx5800p-emu-v1';
+            const d = JSON.parse(localStorage.getItem(KEY) || '{}');
+            d.programs = Array.isArray(d.programs) ? d.programs : [];
+            const i = d.programs.findIndex(p => p.name === prog.name);
+            if (i >= 0) d.programs[i] = prog; else d.programs.push(prog);
+            localStorage.setItem(KEY, JSON.stringify(d));
+            toast('電卓アプリに「' + prog.name + '」を入れました（MODE → PROG → RUN）');
+          } catch (e) { toast('入れられませんでした：' + e.message); return false; }
+        } },
+        { label: '.ccl を書き出す', kind: 'primary', onClick: async () => {
+          if (!r.ok) { toast('書き出せません：' + r.problems.map(x => x.msg).join('／')); return false; }
+          const how = await GB.download(r.fileName, r.bytes, 'application/octet-stream');
+          if (how) toast(r.fileName + ' を書き出しました');
+          return false;
+        } }
+      ]
+    });
   }
 
   // ---- 計算の設定（現場ごと） ----

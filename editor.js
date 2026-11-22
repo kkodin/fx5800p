@@ -282,14 +282,48 @@
       const base = n;
       while (used.has(n.toUpperCase())) n = base + '_' + k++;
       used.add(n.toUpperCase());
-      return { name: n + '.txt', data: '﻿' + p.source.replace(/\r?\n/g, '\r\n') };
+      return { name: 'txt/' + n + '.txt', data: '﻿' + p.source.replace(/\r?\n/g, '\r\n') };
     });
+    // 電卓用の .ccl も一緒に（書き出せないものは一覧にする）
+    const chk = FxCcl.check(programs), ng = [];
+    for (const p of programs) {
+      const r = FxCcl.toCcl(p);
+      if (r.ok) files.push({ name: 'ccl/' + r.fileName, data: r.bytes });
+      else ng.push(p.name + '：' + r.problems.filter(x => x.level === 'error').map(x => (x.line ? x.line + '行 ' : '') + x.msg).join('／'));
+    }
+    const warn = chk.list.flatMap(c => c.problems.filter(x => x.level === 'warn').map(x => c.name + '：' + x.msg));
+    if (ng.length || warn.length || chk.over) {
+      files.push({ name: 'ccl/書き出しの注意.txt', data: '﻿' + ['電卓用（.ccl）の書き出しの注意', '',
+        ...(ng.length ? ['書き出せなかったプログラム：', ...ng, ''] : []),
+        ...(warn.length ? ['注意：', ...warn, ''] : []),
+        ...(chk.over ? ['全部で約 ' + chk.total + ' バイト。電卓のメモリー（約 ' + chk.memory + ' バイト）に入りきらない可能性があります。'] : [])].join('\r\n') });
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(FxZip.make(files));
     a.download = 'fx5800p-programs-' + new Date().toISOString().slice(0, 10) + '.zip';
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast(programs.length + ' 本を zip にまとめて書き出しました');
+    toast(programs.length + ' 本を zip にまとめて書き出しました（txt と .ccl）' + (ng.length ? '。.ccl にできないもの ' + ng.length + ' 本' : ''));
+  }
+  // 1 本を電卓用（.ccl）で書き出す。書き出せない所があれば知らせる
+  function exportCcl() {
+    if (!cur) return;
+    saveNow();
+    const p = cur.p, r = FxCcl.toCcl(p);
+    const errs = r.problems.filter(x => x.level === 'error'), warns = FxCcl.check(programs).list.find(c => c.name === p.name).problems.filter(x => x.level === 'warn');
+    if (errs.length) {
+      $('msg').textContent = '✖ 電卓用に書き出せません：' + errs.map(x => (x.line ? x.line + '行 ' : '') + x.msg).slice(0, 3).join('／');
+      $('msg').className = 'msg ng';
+      if (errs[0].line) gotoLine(errs[0].line);
+      return;
+    }
+    $('msg').textContent = ''; $('msg').className = 'msg';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([r.bytes], { type: 'application/octet-stream' }));
+    a.download = r.fileName;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(r.fileName + '（' + r.size + ' バイト）を書き出しました' + (warns.length ? '。注意：' + warns.map(x => x.msg).join('／') : ''));
   }
   async function readText(f) {
     const buf = await f.arrayBuffer();
@@ -301,7 +335,7 @@
     for (const f of files) {
       try {
         const dec = await FxImport.decodeFile(f);
-        const item = dec ? { name: dec.name, mode: dec.mode, source: dec.source }
+        const item = dec ? Object.assign({ name: dec.name, mode: dec.mode, source: dec.source }, dec.tail ? { tail: dec.tail } : {})
           : { name: f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim(), mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, '') };
         if (dec && dec.unknown) bad.push(dec.name + ' に読めない記号 ' + dec.unknown + ' 個');
         const o = got.get(item.name);
@@ -311,6 +345,7 @@
     let added = 0, replaced = 0, last = null;
     for (const g of got.values()) {
       const p = { name: g.name, mode: g.mode, source: g.source };
+      if (g.tail) p.tail = g.tail;   // 電卓から読んだときの最後の空の改行の数（.ccl を元と同じに書き出すため）
       const i = programs.findIndex(x => x.name === p.name);
       if (i >= 0) { programs[i] = p; replaced++; } else { programs.push(p); added++; }
       last = p;
@@ -419,6 +454,7 @@
     $('bRun').onclick = runInCalc;
     $('bExport').onclick = () => { if (cur) { saveNow(); exportOne(cur.p); } };
     $('bExportAll').onclick = exportAllZip;
+    $('bCcl').onclick = exportCcl;
     $('bKeys').onclick = () => renderPalette('keys');
     $('pName').onchange = rename;
     $('pName').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('src').focus(); } };

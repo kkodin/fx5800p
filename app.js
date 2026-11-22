@@ -708,6 +708,7 @@
       { label: 'DELETE 削除', act: () => openProgList('DELETE') },
       { label: 'IMPORT 読込 txt/ccl/cce', act: () => pickFile('prog') },
       { label: 'EXPORT txt書出', act: () => openProgList('EXPORT') },
+      { label: 'CCL 電卓用に書出', act: () => openProgList('CCL') },
       { label: 'BACKUP 全保存', act: backupAll },
       { label: 'RESTORE 全復元', act: () => pickFile('backup') }
     ], { back: () => { mode = 'comp'; } });
@@ -715,7 +716,7 @@
   const sortedPrograms = () => S.programs.slice().sort((a, b) => a.name.localeCompare(b.name, 'en'));
   function openProgList(kind, selName) {
     const list = sortedPrograms();
-    const title = { RUN: 'Prog List 実行', EDIT: 'Prog Edit 編集', DELETE: 'Delete 削除', EXPORT: 'Export 書出' }[kind];
+    const title = { RUN: 'Prog List 実行', EDIT: 'Prog Edit 編集', DELETE: 'Delete 削除', EXPORT: 'Export 書出', CCL: 'CCL 電卓用（.ccl）' }[kind];
     const items = list.map(p => ({
       label: p.name + (p.mode === 'Formula' ? ' ·FM' : ''), key: p.name,
       act: () => {
@@ -723,6 +724,7 @@
         else if (kind === 'EDIT') { if (bigScreen()) openPcEditor('p=' + encodeURIComponent(p.name)); else openEditor(p); }
         else if (kind === 'DELETE') askConfirm('「' + p.name + '」を削除しますか', () => { S.programs = S.programs.filter(x => x !== p); save(); toast('削除しました'); openProgList('DELETE'); }, () => openProgList('DELETE'));
         else if (kind === 'EXPORT') { exportProgram(p); }
+        else if (kind === 'CCL') { exportCcl(p); }
       }
     }));
     if (kind === 'EXPORT' && list.length) items.unshift({ label: '全部まとめて(txt)', act: () => { for (const p of list) exportProgram(p); } });
@@ -1050,6 +1052,13 @@
   }
   // CcEditor の txt と同じく UTF-8（BOM付き）・改行 CRLF で書き出す
   function exportProgram(p) { download(p.name + '.txt', '﻿' + p.source.replace(/\r?\n/g, '\r\n')); }
+  // 電卓（実機）へ CcLinker で送れる .ccl。書き出せない所があれば知らせて止める
+  function exportCcl(p) {
+    const r = FxCcl.toCcl(p);
+    if (!r.ok) { toast('書き出せません：' + r.problems.filter(x => x.level === 'error').map(x => (x.line ? x.line + '行 ' : '') + x.msg).slice(0, 3).join('／'), 8000); return; }
+    download(r.fileName, r.bytes, 'application/octet-stream');
+    toast(r.fileName + '（' + r.size + ' バイト）を書き出しました');
+  }
   function backupAll() { download('fx5800p-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify({ app: 'fx5800p-emu', version: VERSION, data: S }, null, 1), 'application/json'); toast('バックアップを書き出しました'); }
   let filePurpose = 'prog';
   function pickFile(purpose) {
@@ -1086,7 +1095,7 @@
         // .ccl（電卓から吸い出したファイル）・.cce（CcEditor）は中身を変換して読む
         const dec = await FxImport.decodeFile(f);
         if (dec) {
-          got.push({ name: dec.name, mode: dec.mode, source: dec.source, time: f.lastModified, ccl: /\.ccl$/i.test(f.name) });
+          got.push({ name: dec.name, mode: dec.mode, source: dec.source, tail: dec.tail || 0, time: f.lastModified, ccl: /\.ccl$/i.test(f.name) });
           if (dec.unknown) bad.push(dec.name + '（読めない記号 ' + dec.unknown + '）');
           continue;
         }
@@ -1100,7 +1109,8 @@
       const o = pick.get(g.name);
       if (!o || g.time > o.time || (g.time === o.time && g.ccl && !o.ccl)) pick.set(g.name, g);
     }
-    got = [...pick.values()].map(g => ({ name: g.name, mode: g.mode, source: g.source }));
+    // tail：電卓から読んだときの最後の空の改行の数（.ccl に書き出し直すと元と同じになる）
+    got = [...pick.values()].map(g => g.tail ? { name: g.name, mode: g.mode, source: g.source, tail: g.tail } : { name: g.name, mode: g.mode, source: g.source });
     if (bad.length) toast('注意：' + bad.join('、'), 7000);
     const dup = got.filter(g => S.programs.some(p => p.name === g.name));
     const apply = overwrite => {
