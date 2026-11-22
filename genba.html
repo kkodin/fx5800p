@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1c1f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>現場の座標</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="genba.css?v=1.4.0-dev">
+<script defer src="angle.js?v=1.4.0-dev"></script>
+<script defer src="geo.js?v=1.4.0-dev"></script>
+<script defer src="points.js?v=1.4.0-dev"></script>
+<script defer src="store.js?v=1.4.0-dev"></script>
+<script defer src="dialog.js?v=1.4.0-dev"></script>
+<script defer src="genba.js?v=1.4.0-dev"></script>
+</head>
+<body>
+<header class="top">
+  <a class="back" href="./" title="電卓へ戻る">◀ 電卓</a>
+  <select id="site" class="site" aria-label="現場を選ぶ"></select>
+  <button type="button" id="siteMenu" class="icon" aria-haspopup="menu" aria-expanded="false" title="現場のメニュー">⋯</button>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" data-tab="pts" class="on">座標一覧</button>
+  <button type="button" role="tab" data-tab="calc">測設</button>
+  <button type="button" role="tab" data-tab="hist">履歴</button>
+</nav>
+
+<main>
+  <section id="tab-pts" class="tab">
+    <div id="noSite" class="empty" hidden>
+      <p>現場がまだありません。</p>
+      <button type="button" id="firstSite" class="primary big">＋ 現場を作る</button>
+      <p class="small">座標は、この端末のブラウザの中にだけ保存されます。</p>
+    </div>
+    <div id="ptsView" hidden>
+      <div class="search">
+        <input type="search" id="q" placeholder="点名で探す（数字だけでも可）" aria-label="点名で探す" autocomplete="off" enterkeyhint="search">
+        <select id="sort" aria-label="並べ方">
+          <option value="order">登録順</option>
+          <option value="name">名前順</option>
+        </select>
+      </div>
+      <div id="kinds" class="chips" role="group" aria-label="種類で絞る"></div>
+      <div class="bar">
+        <span id="count" class="count"></span>
+        <span class="grow"></span>
+        <button type="button" id="add">＋ 追加</button>
+        <button type="button" id="imp">取り込み</button>
+        <button type="button" id="exp">CSV 書出</button>
+      </div>
+      <ul id="list" class="list" aria-label="座標一覧"></ul>
+      <button type="button" id="more" class="more" hidden>さらに表示</button>
+    </div>
+  </section>
+  <section id="tab-calc" class="tab" hidden>
+    <div class="empty"><p>測設の画面は次の段階で作ります。</p></div>
+  </section>
+  <section id="tab-hist" class="tab" hidden>
+    <div class="empty"><p>計算の履歴は次の段階で作ります。</p></div>
+  </section>
+</main>
+<input type="file" id="fileIn" hidden>
+<div id="toast" class="toast" role="status"></div>
+</body>
+</html>

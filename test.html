@@ -16,9 +16,10 @@
 </style>
 <script src="angle.js"></script>
 <script src="geo.js"></script>
+<script src="points.js"></script>
 </head>
 <body>
-<h1>計算の試験（angle.js・geo.js）</h1>
+<h1>試験（angle.js・geo.js・points.js）</h1>
 <div id="sum"></div>
 <table><thead><tr><th>結果</th><th>試験</th><th>期待</th><th>実際</th></tr></thead><tbody id="rows"></tbody></table>
 <script>
@@ -122,6 +123,51 @@
   test('既知点が同じ位置', 'エラー', () => G.freeStation(K1, K1, { h: 0, s: 1 }, { h: 90, s: 1 }), () => false);
   test('距離 0', 'エラー', () => G.freeStation(K1, K2, { h: 0, s: 0 }, { h: 90, s: 1 }), () => false);
   test('観測値なし', 'エラー', () => G.freeStation(K1, K2, null, { h: 90, s: 1 }), () => false);
+
+  // ---- 座標一覧（points.js） ----
+  const PT = FxPoints;
+  test('揃える 全角', 'no.3', () => PT.normKey('Ｎｏ．３'));
+  test('揃える カタカナ→ひらがな', 'にげ1', () => PT.normKey('ニゲ①'));
+  const pts = ['No.1', 'No.2', 'No.10', 'No.12', 'No.120', 'BM-12', '杭12', '境界杭 No.3', '逃げ①', 'K1', 'K2'].map((n, i) => ({ id: 'p' + i, name: n, x: i, y: i * 2, kind: i < 9 ? '測点' : '既知点', memo: '' }));
+  const names = (q, o) => PT.search(pts, q, o).map(p => p.name).join(',');
+  test('数字だけ 12', 'No.12,BM-12,杭12,No.120', () => names('12'));
+  test('数字だけ 3', '境界杭 No.3', () => names('3'));
+  test('丸数字を数字で 1', 'No.1,逃げ①,K1,No.10,No.12,No.120,BM-12,杭12', () => names('1'));
+  test('部分一致 境界', '境界杭 No.3', () => names('境界'));
+  test('全角で探す ｎｏ．１２', 'No.12,No.120', () => names('ｎｏ．１２'));
+  test('カタカナの点名をひらがなで探す', 'ニゲ杭', () => PT.search([{ id: 'a', name: 'ニゲ杭', x: 0, y: 0 }], 'にげ').map(p => p.name).join(','));
+  test('種類で絞る', 'K1,K2', () => names('', { kind: '既知点' }));
+  test('名前順（数は数として）', 'No.1,No.2,No.10,No.12,No.120,境界杭 No.3', () => PT.search(pts, 'no.', { sort: 'name' }).map(p => p.name).join(','));
+  test('最近使った点が上', 'K2,No.1', () => PT.search(pts, '', { recent: ['p10'] }).slice(0, 2).map(p => p.name).join(','));
+  test('範囲 No.2〜No.12', 'No.2,No.10,No.12', () => PT.range(pts, 'No.2', 'No.12').map(p => p.name).join(','));
+
+  const imp = t => PT.parseText(t);
+  const one = (t, i) => { const r = imp(t).rows[i || 0]; return r ? [r.name, r.x, r.y, r.z, r.memo].join('|') : '（なし）'; };
+  test('CSV 点名,X,Y', 'K1|1000|2000||', () => one('K1,1000.000,2000.000'));
+  test('CSV Z とメモ', 'K1|1000|2000|12.5|釘', () => one('K1,1000,2000,12.5,釘'));
+  test('CSV 番号,点名,X,Y,Z', 'BM-1|10|20|3|', () => one('1,BM-1,10,20,3'));
+  test('タブ区切り（Excel 貼り付け）', '境界杭 No.3|1031.5|2051.2||', () => one('境界杭 No.3\t1031.5\t2051.2'));
+  test('空白区切り・点名に空白', '境界杭 No.3|1031.5|2051.2||', () => one('境界杭 No.3  1031.5 2051.2'));
+  test('数字だけの点名', '101|1|2||', () => one('101,1,2'));
+  test('見出しの行は飛ばす', '1|0', () => { const r = imp('点名,X,Y,Z\nK1,1,2,3'); return r.rows.length + '|' + r.errors.length; });
+  test('" で囲んだ欄', 'A,B|1|2||', () => one('"A,B",1,2'));
+  test('負の座標・全角の数字', 'K9|-12.5|300||', () => one('K9,－12.5,３００'));
+  test('読めない行はエラーに', '1|1', () => { const r = imp('K1,1,2\nK2,abc,2'); return r.rows.length + '|' + r.errors.length; });
+  test('SIMA', 'SIMA|2|KI-1|-123.456|789.012', () => {
+    const r = imp('G00,01,現場,\nZ00,座標データ,\nA00,\nA01,1,KI-1,-123.456,789.012,10.5,\nA01,2,KI-2,1,2,,\nA99,\n');
+    return [r.format, r.rows.length, r.rows[0].name, r.rows[0].x, r.rows[0].y].join('|');
+  });
+  test('Shift_JIS の文字コード', '境界杭,1,2', () => PT.decode(new Uint8Array([0x8b, 0xab, 0x8a, 0x45, 0x8d, 0x59, 0x2c, 0x31, 0x2c, 0x32])));
+  test('UTF-8（BOM 付き）', 'K1', () => PT.decode(new TextEncoder().encode('﻿K1')));
+  test('取り込みの計画 置き換え', 'replace,add', () => PT.plan([{ name: 'K1' }], [{ name: 'K1', x: 1, y: 2 }, { name: 'K3', x: 1, y: 2 }], 'replace').map(r => r.action).join(','));
+  test('取り込みの計画 別名', 'K1 (2)', () => PT.plan([{ name: 'K1' }], [{ name: 'K1', x: 1, y: 2 }], 'rename')[0].name);
+  test('取り込みの計画 飛ばす', 'skip', () => PT.plan([{ name: 'K1' }], [{ name: 'K1', x: 1, y: 2 }], 'skip')[0].action);
+  test('X と Y を入れ替え', '2|1', () => { const r = PT.plan([], [{ name: 'A', x: 1, y: 2 }], 'replace', true)[0]; return r.x + '|' + r.y; });
+  test('CSV 書き出し', '点名,X,Y,Z,種類,メモ\r\n"A,B",1.000,2.000,,既知点,\r\n', () => PT.toCsv([{ name: 'A,B', x: 1, y: 2, z: null, kind: '既知点', memo: '' }]));
+  test('絞り込み 500 点が 30ms 以内', true, () => {
+    const many = []; for (let i = 0; i < 500; i++) many.push({ id: 'm' + i, name: (i % 3 ? 'No.' : '杭') + i, x: i, y: i, kind: '測点', memo: '' });
+    const t0 = performance.now(); for (let k = 0; k < 10; k++) PT.search(many, String(k + 10)); return (performance.now() - t0) / 10 < 30;
+  });
 
   // ---- 表示 ----
   const ng = rows.filter(r => !r.ok).length;
