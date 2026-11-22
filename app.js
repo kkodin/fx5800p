@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.4';
+  const VERSION = '1.4.5';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -125,6 +125,8 @@
     if (mode === 'run' && run && run.wait && run.wait.type === 'pause') ind.push('<b>Disp</b>');
     if (mode === 'run' && run && !run.wait && !run.done) ind.push('<b class="busy">▮</b>');
     if (mode === 'edit' && edit) ind.unshift('<span class="ed">' + esc(edit.prog.name) + (edit.prog.mode === 'Formula' ? ' FM' : '') + '</span>');
+    // 実行中に値を聞かれたとき：その変数の日本語の名前（'変数 の行から）を右側に出す
+    if (mode === 'run' && hintName) ind.push('<span class="ihint" title="' + esc(hintName) + '">' + esc(hintName) + '</span>');
     if (extra) ind.push(extra);
     $('ind').innerHTML = ind.join(' ');
   }
@@ -154,9 +156,11 @@
   function render() {
     // タブの画面の「変数」「履歴」は、計算のたびに描き直す
     queueMicrotask(() => { if (tab === 'var' || tab === 'hist') renderTabs(); });
+    if (mode !== 'run') setHint('');
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
     document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
+    if (window.FxLayout && FxLayout.setMenu) FxLayout.setMenu(mode === 'menu');
     updateKeyFaces();
     $('editor').hidden = mode !== 'edit';
     $('screen').hidden = mode === 'edit';
@@ -357,12 +361,13 @@
         + '<div class="menu-help">' + esc(m.view.text) + '</div>';
       indicators(); return;
     }
-    const hasDesc = m.items.some(it => it.desc || it.help);
+    const hasDesc = m.items.some(it => it.desc || it.help || it.title);
     const showDesc = hasDesc && S.showDesc !== false;
     const short = !showDesc && m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9);
     const items = m.items.map((it, i) =>
       '<div class="mrow' + (showDesc ? ' desc' : '') + '"><button type="button" class="mi' + (i === m.sel ? ' sel' : '') + '" data-tap="' + i + '">' +
-      (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lbw"><span class="lb">' + esc(it.label) + '</span>'
+      (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lbw">'
+      + (showDesc && it.title ? '<span class="tt">' + esc(it.title) + '</span><span class="lb sub">' + esc(it.label) + '</span>' : '<span class="lb">' + esc(it.label) + '</span>')
       + (showDesc && it.desc ? '<span class="ds">' + esc(it.desc) + '</span>' : '') + '</span></button>'
       + (showDesc && it.help ? '<button type="button" class="mhelp" data-tap="h' + i + '" aria-label="' + esc(it.label) + ' の解説">？</button>' : '') + '</div>').join('');
     $('screen').innerHTML =
@@ -495,14 +500,17 @@
       const list = sortedPrograms();
       if (!list.length) html = '<div class="tb-empty">プログラムがありません</div>';
       for (const p of list) {
-        const md = B.meta(p.source);
-        html += '<div class="tb-row"><span class="nm">' + esc(p.name) + '</span><span class="ds">' + esc(md.summary || p.title || '') + '</span><span style="margin-left:auto;display:flex;gap:4px">'
-          + (md.help ? '<button type="button" data-phelp="' + esc(p.name) + '">？</button>' : '')
+        const md = B.meta(p.source), hasHelp = md.help || md.usage.length || Object.keys(md.vars).length;
+        html += '<div class="tb-row"><span class="nm">' + (md.title ? '<span class="ttl">' + esc(md.title) + '</span>' : '') + esc(p.name) + '</span><span class="ds">' + esc(md.summary || p.title || '') + '</span><span style="margin-left:auto;display:flex;gap:4px">'
+          + (hasHelp ? '<button type="button" data-phelp="' + esc(p.name) + '">？</button>' : '')
           + '<button type="button" data-run="' + esc(p.name) + '">▶ 実行</button></span></div>';
       }
     } else if (tab === 'var') {
       const vs = ['Ans'].concat(LETTERS.split ? LETTERS.split('') : Array.from(LETTERS));
-      for (const v of vs) html += '<div class="tb-row" data-ins="' + v + '" style="cursor:pointer"><span class="nm">' + v + '</span><span class="vl">' + esc(E.formatNumber(S.vars[v] || 0, S.disp)) + '</span></div>';
+      // 最後に動かしたプログラムの '変数 の名前を出す
+      const lp = S.programs.find(x => x.name === S.lastProg), names = lp ? B.meta(lp.source).vars : {};
+      if (lp && Object.keys(names).length) html += '<div class="tb-h">変数の名前：' + esc(B.meta(lp.source).title || lp.name) + '</div>';
+      for (const v of vs) html += '<div class="tb-row" data-ins="' + v + '" style="cursor:pointer"><span class="nm">' + v + '</span><span class="ds">' + esc(names[v] || '') + '</span><span class="vl">' + esc(E.formatNumber(S.vars[v] || 0, S.disp)) + '</span></div>';
       html += '<div class="tb-row"><span class="nm">Z[ ]</span><span class="vl">' + (S.vars.__dim || 0) + ' 個</span></div>';
     } else if (tab === 'hist') {
       if (!S.history.length) html = '<div class="tb-empty">まだ計算の履歴がありません</div>';
@@ -522,9 +530,9 @@
         if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list');
       } else if (ph) {
         const p = S.programs.find(x => x.name === ph.dataset.phelp); if (!p) return;
-        const md = B.meta(p.source);
-        openMenu('プログラム', [{ label: p.name, desc: md.summary, help: md.help, act: () => {} }], { back: () => { mode = 'comp'; } });
-        openHelpView(p.name, p.name + (md.summary ? '\n' + md.summary : '') + '\n\n' + md.help);
+        const md = B.meta(p.source), txt = B.helpText(p.name, p.source);
+        openMenu('プログラム', [{ label: p.name, title: md.title, desc: md.summary, help: txt, act: () => {} }], { back: () => { mode = 'comp'; } });
+        openHelpView(md.title || p.name, txt);
       } else if (hi) {
         mode = 'comp'; comp.toks = S.history[Number(hi.dataset.hist)].slice(); comp.cur = comp.toks.length; comp.shown = null;
       } else return;
@@ -870,6 +878,14 @@
       { label: 'IMPORT 読込 txt/ccl/cce', act: () => pickFile('prog') },
       { label: 'EXPORT txt書出', act: () => openProgList('EXPORT') },
       { label: 'CCL 電卓用に書出', act: () => openProgList('CCL') },
+      { label: 'INFO 手持ちに説明を付ける', act: () => {
+        // KAIHOU・SUB1・SUB2・KYOKUSEN に、日本語の名前・使い方・変数の名前を付ける（中身が元と同じときだけ）
+        if (!window.FxProgInfo) { toast('説明の部品を読めませんでした'); return; }
+        const r = FxProgInfo.addToKnown(S.programs);
+        if (r.done.length) save();
+        toast((r.done.length ? r.done.join('・') + ' に説明を付けました。' : '説明を付けたプログラムはありません。') + (r.skipped.length ? '　付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）' : ''), 8000);
+        openProgList('RUN');
+      } },
       { label: 'BACKUP 全保存', act: backupAll },
       { label: 'RESTORE 全復元', act: () => pickFile('backup') }
     ], { back: () => { mode = 'comp'; } });
@@ -881,7 +897,8 @@
     const items = list.map(p => ({
       label: p.name + (p.mode === 'Formula' ? ' ·FM' : ''), key: p.name,
       // プログラムの中の '説明 と '解説 の行（アプリだけが読む）
-      ...(md => ({ desc: md.summary || p.title || '', help: md.help ? p.name + (md.summary ? '\n' + md.summary : '') + '\n\n' + md.help : '' }))(B.meta(p.source)),
+      // '名前（日本語の名前）・'説明・'使い方・'変数・'解説 の行（アプリだけが読む）
+      ...(md => ({ title: md.title, desc: md.summary || p.title || '', help: (md.help || md.usage.length || Object.keys(md.vars).length) ? B.helpText(p.name, p.source) : '' }))(B.meta(p.source)),
       act: () => {
         if (kind === 'RUN') { if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list'); }
         else if (kind === 'EDIT') { if (bigScreen()) openPcEditor('p=' + encodeURIComponent(p.name)); else openEditor(p); }
@@ -1026,6 +1043,7 @@
       });
     } catch (e) { showError(e, from === 'comp' ? 'comp' : 'runlist'); return; }
     run = { gen, prog: p, from, grid: newGrid(), wait: null, done: false, stopped: false, inToks: [], inCur: 0 };
+    if (!p.name.startsWith('(')) S.lastProg = p.name;   // 変数のタブで、このプログラムの変数の名前を出す
     mode = 'run'; lastKeyCode = 0;
     pump();
   }
@@ -1062,7 +1080,18 @@
       render();
     }
   }
+  // 実行中に値を聞かれたとき、その変数の日本語の名前（'変数 の行から）。液晶のいちばん上の行の右に出す
+  let hintName = '';
+  function runHint() {
+    const w = run && run.wait;
+    if (!w || w.type !== 'input' || !w.target) return '';
+    const p = S.programs.find(x => x.name === w.prog) || (run.prog && run.prog.name === w.prog ? run.prog : null);
+    if (!p) return '';
+    return B.meta(p.source).vars[w.target] || '';
+  }
+  function setHint(text) { hintName = text || ''; }
   function renderRun() {
+    setHint(runHint());
     const g = run.grid, lines = g.rows.map(r => line(r.join('')));
     if (run.wait && run.wait.type === 'input' && (run.inToks.length || !run.wait.keep)) {
       const t = run.inToks.join(''), cur = run.inToks.slice(0, run.inCur).join('').length;
@@ -1404,7 +1433,7 @@
     if (mode === 'menu') {
       if (t === 'back') { menuKey({ id: 'EXIT' }); }
       else if (t === 'desc') { S.showDesc = S.showDesc === false; save(); }
-      else if (t[0] === 'h') { const it = menu.items[Number(t.slice(1))]; if (it && it.help) { menu.sel = Number(t.slice(1)); openHelpView(it.label, it.help); } }
+      else if (t[0] === 'h') { const it = menu.items[Number(t.slice(1))]; if (it && it.help) { menu.sel = Number(t.slice(1)); openHelpView(it.title || it.label, it.help); } }
       else { const i = Number(t); if (menu.items[i]) { menu.sel = i; menu.items[i].act(); } }
     }
     else if (mode === 'calc' || mode === 'solve') { const st = mode === 'calc' ? calc : solve; if (substCommit(st, mode)) st.idx = Number(t); }

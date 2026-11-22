@@ -432,6 +432,18 @@
       ]),
       buttons: [
         { label: '閉じる' },
+        { label: '手持ちに説明を付ける', onClick: () => {
+          // 電卓アプリに入っている KAIHOU・SUB1・SUB2・KYOKUSEN に、日本語の名前・使い方・変数の名前を付ける（中身が元と同じときだけ）
+          try {
+            const KEY = 'fx5800p-emu-v1';
+            const d = JSON.parse(localStorage.getItem(KEY) || '{}');
+            d.programs = Array.isArray(d.programs) ? d.programs : [];
+            const r = FxProgInfo.addToKnown(d.programs);
+            if (r.done.length) localStorage.setItem(KEY, JSON.stringify(d));
+            toast((r.done.length ? r.done.join('・') + ' に説明を付けました。' : '説明を付けたプログラムはありません（電卓アプリに KAIHOU などが入っていない）。') + (r.skipped.length ? '　付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）' : ''));
+          } catch (e) { toast('付けられませんでした：' + e.message); }
+          return false;
+        } },
         { label: '電卓アプリに入れる', onClick: () => {
           try {
             const KEY = 'fx5800p-emu-v1';

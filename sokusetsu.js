@@ -130,8 +130,8 @@
   //   OBXY（SUB）：器械点 U・V、0 方向 W と、観測 H（角）・L（距離）から X・Y を出す（KAIHOU 型の計算に使う）
   //   KANSOKU：NINI のあとで、観測した点の座標を出す（OBXY を使う）
   function calcPrograms() {
-  // プログラムの頭に、アプリだけが読む '説明・'解説 の行を付ける（電卓へ送るときは消える）
-  const withNotes = (summary, help, src) => ["'説明 " + summary].concat(help.map(l => "'解説 " + l), [src]).join('\n');
+  // 日本語の名前・使い方・変数の名前（proginfo.js）を頭に付ける。proginfo.js がなければ本文のまま
+  const info = (name, src) => root.FxProgInfo ? root.FxProgInfo.attach(name, src) : src;
     const nini = [
       'Deg:Fix 3',
       '"Z 1/0"?→O',
@@ -197,11 +197,11 @@
       'IfEnd'
     ].join('\n');
     return [
-      { name: 'TYOKUSEN', mode: 'COMP', source: withNotes('直線の右・左のずれ（KAIHOU の X・Y を使う）', ['IP-X・IP-Y：今いる直線の起点（IP）の座標', 'X・Y：KAIHOU で出た点。EXE だけでそのまま使う', 'IA：その直線の方向角（°′″ キーで）', '答え：MIGI（右）か HIDARI（左）と、ずれ（m）', '直した版：点が IP より西にあっても正しく出る。KAIHOU の角度 H を書き換えない'], tyokusen), title: '直線の右・左（直した版。KAIHOU の X・Y を使う）', uses: '読む X・Y／書く T・S・M・N・I・J（KAIHOU の A〜D・G・H・K は使わない）' },
-      { name: 'NINI', mode: 'COMP', source: withNotes('任意点設置と測設（既知点 N 点・高さ）', ['Z 1/0：高さも出すなら 1（HI＝器械高、HT＝ターゲット高）', 'N：見る既知点の数（2 点以上）', '既知点ごとに KX・KY（座標）、HA（水平角、°′″ キー）、HD（水平距離）。高さありなら KZ（標高）、VD（高低差）', 'SCALE（1 に近いほどよい）、RMS(MM)（観測のばらつき）、OX・OY（器械点）、OZ（地盤高）が出る', 'PX・PY を入れるたびに HA・HD。高さありなら PZ（計画高）で、合わせる VD が出る。AC で終わり', 'SUB の HADI を使う（一緒に送る）。A〜Z を全部使う'], nini), title: '任意点設置と測設（既知点 N 点・高さ）', uses: 'A〜I・J・K・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z（全部）' },
-      { name: 'HADI', mode: 'COMP', source: withNotes('SUB：器械点から測点への角度と距離', ['NINI などから呼ぶ。U・V＝器械点、W＝器械の 0 方向、X・Y＝測点', 'HA（水平角）と HD（水平距離）を出す。I・J・K を書き換える'], hadi), title: 'SUB：測点への角度と距離', uses: '読む U・V・W・X・Y／書く I・J・K' },
-      { name: 'OBXY', mode: 'COMP', source: withNotes('SUB：観測（角度・距離）から座標', ['U・V＝器械点、W＝器械の 0 方向、H＝水平角、L＝水平距離 から X・Y を出す', 'I・J・X・Y を書き換える'], obxy), title: 'SUB：観測から座標', uses: '読む U・V・W・H・L／書く I・J・X・Y' },
-      { name: 'KANSOKU', mode: 'COMP', source: withNotes('観測した点の座標（NINI のあと）', ['NINI で器械点を決めたあと、HA・HD を入れるたびに X・Y を出す', 'SUB の OBXY を使う（一緒に送る）'], kansoku), title: '観測した点の座標（NINI のあと）', uses: '読む U・V・W／書く H・L・I・J・X・Y' }
+      { name: 'TYOKUSEN', mode: 'COMP', source: info('TYOKUSEN', tyokusen), title: '直線の右・左（直した版。KAIHOU の X・Y を使う）', uses: '読む X・Y／書く T・S・M・N・I・J（KAIHOU の A〜D・G・H・K は使わない）' },
+      { name: 'NINI', mode: 'COMP', source: info('NINI', nini), title: '任意点設置と測設（既知点 N 点・高さ）', uses: 'A〜I・J・K・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z（全部）' },
+      { name: 'HADI', mode: 'COMP', source: info('HADI', hadi), title: 'SUB：測点への角度と距離', uses: '読む U・V・W・X・Y／書く I・J・K' },
+      { name: 'OBXY', mode: 'COMP', source: info('OBXY', obxy), title: 'SUB：観測から座標', uses: '読む U・V・W・H・L／書く I・J・X・Y' },
+      { name: 'KANSOKU', mode: 'COMP', source: info('KANSOKU', kansoku), title: '観測した点の座標（NINI のあと）', uses: '読む U・V・W／書く H・L・I・J・X・Y' }
     ];
   }
 

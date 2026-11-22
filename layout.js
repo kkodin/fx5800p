@@ -17,6 +17,9 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   let opt = null, st = null, info = { orient: 'portrait', free: false, rotated: false, W: 0, H: 0 };
   let editing = null;
+  let menuOpen = false;
+  // 電卓のメニューを開いた・閉じた（app.js が呼ぶ）
+  function setMenu(open) { if (open === menuOpen) return; menuOpen = open; if (info.free) apply(); }
 
   function defaults() { return { orient: 'auto', font: 3, portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
   function fix(s) {
@@ -51,11 +54,18 @@
       calc.style.width = W + 'px'; calc.style.height = H + 'px';
       calc.style.transform = rotated ? 'translateX(' + vw + 'px) rotate(90deg)' : '';
     } else { calc.style.width = calc.style.height = calc.style.transform = ''; }
+    // メニューを開いている間（自由配置）は、ディスプレイを「上のボタン」の場所まで広げる（テンキーは残す）
+    const menuBig = free && menuOpen && !editing;
+    const u = L.blocks.upper, l0 = L.blocks.lcd;
+    const big = menuBig ? { x: Math.min(l0.x, u.x), y: Math.min(l0.y, u.y), w: Math.max(l0.x + l0.w, u.x + u.w) - Math.min(l0.x, u.x), h: Math.max(l0.y + l0.h, u.y + u.h) - Math.min(l0.y, u.y) } : null;
     for (const b of BLOCKS) {
-      const el = calc.querySelector('[data-blk="' + b + '"]'), p = L.blocks[b];
+      const el = calc.querySelector('[data-blk="' + b + '"]');
+      let p = L.blocks[b];
       if (!el) continue;
       if (free) {
-        el.hidden = b === 'tabs' && !p.show;
+        el.hidden = (b === 'tabs' && !p.show) || (menuBig && b === 'upper');
+        if (menuBig && b === 'lcd') p = big;
+        el.style.zIndex = menuBig && b === 'lcd' ? 6 : '';
         el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.width = p.w + '%'; el.style.height = p.h + '%';
       } else {
         el.hidden = b === 'tabs';
@@ -193,5 +203,5 @@
     let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(apply, 80); });
     if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', () => setTimeout(apply, 120));
   }
-  root.FxLayout = { init, apply, openSettings, startEdit, get info() { return info; }, get state() { return st; }, FS };
+  root.FxLayout = { init, apply, openSettings, startEdit, setMenu, get info() { return info; }, get state() { return st; }, FS };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

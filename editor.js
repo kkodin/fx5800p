@@ -30,7 +30,7 @@
   // ---- 一覧 ----
   function renderList() {
     const q = $('search').value.trim().toUpperCase();
-    const sum = p => B.meta(p.source).summary || p.title || '';
+    const sum = p => { const md = B.meta(p.source); return [md.title, md.summary || p.title || ''].filter(Boolean).join('：'); };
     const list = programs.slice().sort((a, b) => a.name.localeCompare(b.name, 'en')).filter(p => !q || p.name.toUpperCase().includes(q) || sum(p).toUpperCase().includes(q));
     $('list').innerHTML = '';
     for (const p of list) {
@@ -67,8 +67,9 @@
   function highlightLine(line) {
     // 行の先頭が ' の行：アプリだけが読む説明（'説明・'解説）・メモ。電卓へは送らない
     if (/^\s*'/.test(line)) {
-      const k = /^\s*'\s*(説明|解説)/.exec(line);
-      return '<span class="t-note' + (k ? ' t-note-' + (k[1] === '説明' ? 'sum' : 'help') : '') + '">' + esc(line) + '</span>';
+      const k = /^\s*'\s*(名前|説明|使い方|変数|解説)/.exec(line);
+      const cls = k ? { 名前: 'name', 説明: 'sum', 使い方: 'use', 変数: 'var', 解説: 'help' }[k[1]] : '';
+      return '<span class="t-note' + (cls ? ' t-note-' + cls : '') + '">' + esc(line) + '</span>';
     }
     let out = '', i = 0;
     while (i < line.length) {

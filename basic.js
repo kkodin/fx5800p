@@ -249,7 +249,8 @@
             const label = c.prompt !== undefined ? c.prompt : (c.target.kind === 'var' ? c.target.name : '');
             const cur = read(c.target);
             for (;;) {
-              const raw = yield { type: 'input', label, keep: c.keep, current: cur, currentText: E.formatNumber(cur, state.disp) };
+              // prog・target：どのプログラムのどの変数に入れるか（アプリで日本語の名前を出すため）
+              const raw = yield { type: 'input', label, keep: c.keep, current: cur, currentText: E.formatNumber(cur, state.disp), prog: f.name, target: c.target.kind === 'var' ? c.target.name : (c.target.letter ? c.target.letter + '[' + c.target.index + ']' : null) };
               if ((raw === '' || raw == null) && c.keep) break;
               if (raw === '' || raw == null) continue;
               const r = calc(raw);
@@ -283,29 +284,55 @@
   function check(source) { compile(source, true); return true; }
 
   // ---- アプリだけが読む説明（行の先頭が ' の行） ----
-  //   '説明 … → 内容説明（一覧に出す 1 行）
-  //   '解説 … → 解説（何行でも。「？」で開く）
-  //   ' …     → メモ（どこにも出さない）
+  //   '名前 …   → アプリで出す日本語のプログラム名（一覧で大きく出す）
+  //   '説明 …   → 内容説明（一覧に出す 1 行）
+  //   '使い方 … → 使い方の手順（何行でも。「？」で開く画面に番号付きで出す）
+  //   '変数 A=… B=… → 変数の日本語の名前（実行中の入力の案内・変数のタブに出す）。1 行に何個でも、何行でも
+  //   '解説 …   → 解説（何行でも。「？」で開く）
+  //   ' …       → メモ（どこにも出さない）
   const isNote = l => /^\s*'/.test(l);
   function meta(source) {
     const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
-    let summary = '';
-    const help = [];
+    let summary = '', title = '';
+    const help = [], usage = [], vars = {};
     for (const l of lines) {
       if (!isNote(l)) continue;
       const t = l.replace(/^\s*'/, '');
       let m;
-      if ((m = t.match(/^\s*説明\s*[:：]?\s*(.*)$/))) { if (!summary) summary = m[1].trim(); else help.push(m[1]); }
+      if ((m = t.match(/^\s*名前\s*[:：]?\s*(.*)$/))) { if (!title) title = m[1].trim(); }
+      else if ((m = t.match(/^\s*説明\s*[:：]?\s*(.*)$/))) { if (!summary) summary = m[1].trim(); else help.push(m[1]); }
+      else if ((m = t.match(/^\s*使い方\s*[:：]?\s*(.*)$/))) { if (m[1].trim()) usage.push(m[1].trim()); }
+      else if ((m = t.match(/^\s*変数\s*[:：]?\s*(.*)$/))) {
+        // A=既知点の X、B＝…、Z[1]=曲線の数。名前の中の「＝」「、」はそのまま（区切りは「、のあとに 変数＝」の所だけ）
+        const V = '(?:Z\\[\\d+\\]|[A-Zθ]|Ans)';
+        const parts = m[1].split(new RegExp('\\s*[,、]\\s*(?=' + V + '\\s*[=＝])'));
+        let hit = false, n;
+        for (const part of parts) {
+          if ((n = part.match(new RegExp('^\\s*(' + V + ')\\s*[=＝]\\s*(.*)$')))) { vars[n[1]] = n[2].trim(); hit = true; }
+        }
+        if (!hit && (n = m[1].match(/^(Z\[\d+\]|[A-Zθ]|Ans)\s+(.+)$/))) vars[n[1]] = n[2].trim();
+      }
       else if ((m = t.match(/^\s*解説\s*[:：]?\s?(.*)$/))) help.push(m[1]);
     }
-    return { summary, help: help.join('\n').replace(/\s+$/, '') };
+    return { title, summary, usage, vars, help: help.join('\n').replace(/\s+$/, '') };
+  }
+  // 「？」で開く画面の文（名前・説明・使い方・変数・解説をまとめる）
+  function helpText(name, source) {
+    const md = meta(source), out = [];
+    out.push(md.title ? md.title + '（' + name + '）' : name);
+    if (md.summary) out.push(md.summary);
+    if (md.usage.length) out.push('', '【使い方】', ...md.usage.map((u, i) => (i + 1) + '. ' + u));
+    const vk = Object.keys(md.vars);
+    if (vk.length) out.push('', '【変数】', ...vk.map(k => k + '：' + md.vars[k]));
+    if (md.help) out.push('', '【解説】', md.help);
+    return out.join('\n');
   }
   // 電卓（実機）へ送るときは ' の行を消す
   function strip(source) {
     return String(source || '').replace(/\r\n?/g, '\n').split('\n').filter(l => !isNote(l)).join('\n');
   }
 
-  const api = { compile, run, check, split, meta, strip };
+  const api = { compile, run, check, split, meta, strip, helpText };
   root.FxBasic = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

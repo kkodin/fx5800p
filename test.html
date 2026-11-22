@@ -17,6 +17,7 @@
 <script src="angle.js"></script>
 <script src="geo.js"></script>
 <script src="points.js"></script>
+<script src="proginfo.js"></script>
 <script src="sokusetsu.js"></script>
 <script src="plot.js"></script>
 <script src="zip.js"></script>
@@ -378,6 +379,40 @@
   test('文字列の中の \' は説明にならない', '"A\'B"', () => FxBasic.strip('"A\'B"'));
   test('実機用の一式：全部に説明がある', '', () => SET.concat(SN.calcCurvePrograms()).filter(p => !FxBasic.meta(p.source).summary).map(p => p.name).join(','));
   test('実機用の一式：説明を付けてもバイト数は同じ（TYOKUSEN 88）', 88, () => CC.toCcl(SET.find(p => p.name === 'TYOKUSEN')).size);
+
+  // ---- 日本語の名前・使い方・変数の名前（'名前・'使い方・'変数、proginfo.js） ----
+  const MD_SRC = "'名前 試験の名前\n'説明 説明の 1 行\n'使い方 1 番目\n'使い方 2 番目\n'変数 A=既知点の X、B＝既知点の Y\n'変数 K=0＝開放、1＝放射\n'変数 Z[1]=曲線の数\n1→A";
+  const MD = FxBasic.meta(MD_SRC);
+  test('名前', '試験の名前', () => MD.title);
+  test('使い方', '1 番目|2 番目', () => MD.usage.join('|'));
+  test('変数の名前（1 行に 2 つ）', '既知点の X|既知点の Y', () => MD.vars.A + '|' + MD.vars.B);
+  test('変数の名前に ＝ や 、 が入っても読める', '0＝開放、1＝放射', () => MD.vars.K);
+  test('変数 Z[1] の名前', '曲線の数', () => MD.vars['Z[1]']);
+  test('「？」の画面の文に使い方と変数', true, () => { const t = FxBasic.helpText('T', MD_SRC); return /【使い方】\n1\. 1 番目/.test(t) && /A：既知点の X/.test(t); });
+  test('名前を付けても .ccl のバイト数は同じ（NINI 531）', 531, () => CC.toCcl(SET.find(p => p.name === 'NINI')).size);
+  test('実機用の一式：全部に日本語の名前と変数の名前', '', () => SET.concat(SN.calcCurvePrograms()).filter(p => { const m = FxBasic.meta(p.source); return !m.title || !Object.keys(m.vars).length; }).map(p => p.name).join(','));
+  test('手持ちの KAIHOU（行の区切りが違う手入力の版）にも付く', 'KAIHOU,SUB1,SUB2', () => {
+    const progs = [
+      { name: 'KAIHOU', source: 'Fix 3:Prog "SUB1":\n"KYORI"?G:"KAKUDO"?H\nRec(G,H+J)+C→X\n"-FX-":X◢\nJ+D→Y\n"-FY-":Y◢\n"KAIHOU⇒0"\n"HOUSYA⇒1"\n?→K:K=0⇒Prog "SUB2"\nNorm 2' },
+      { name: 'SUB1', source: '"BX"?A:"BY"?B\n"OX"?C:"OY"?D\nPol(A-C,B-D)' }, { name: 'SUB2', source: '\nC→A:D→B\nX→C:Y→D' }];
+    return FxProgInfo.addToKnown(progs).done.join(',');
+  });
+  test('中身が違う手持ちには付けない', 'KYOKUSEN', () => FxProgInfo.addToKnown([{ name: 'KYOKUSEN', source: '1→A' }]).skipped.map(x => x.name).join(','));
+  test('付けたあとも動きは同じ（KAIHOU の 10 m・45°）', '7.071|7.071', () => {
+    const progs = [{ name: 'KAIHOU', source: FxProgInfo.attach('KAIHOU', FxProgInfo.KNOWN.KAIHOU) }, { name: 'SUB1', source: FxProgInfo.attach('SUB1', FxProgInfo.KNOWN.SUB1) }, { name: 'SUB2', source: FxProgInfo.attach('SUB2', FxProgInfo.KNOWN.SUB2) }];
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const g = FxBasic.run(progs[0], { vars, io: { print() {}, printValue() {}, locate() {}, cls() {} }, library: progs });
+    const inputs = ['10', '0', '0', '0', '10', '45', '1']; let r = g.next(), n = 0;
+    while (!r.done && n++ < 100) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+    return vars.X.toFixed(3) + '|' + vars.Y.toFixed(3);
+  });
+  test('入力を聞くときに、どのプログラムのどの変数か分かる', 'KAIHOU:G', () => {
+    const progs = [{ name: 'KAIHOU', source: FxProgInfo.KNOWN.KAIHOU }, { name: 'SUB1', source: FxProgInfo.KNOWN.SUB1 }];
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const g = FxBasic.run(progs[0], { vars, io: { print() {}, printValue() {}, locate() {}, cls() {} }, library: progs });
+    let r = g.next(); for (const v of ['1', '0', '0', '0']) r = g.next(v);   // SUB1 の 4 つ
+    return r.value.prog + ':' + r.value.target;
+  });
 
   // ---- 図（plot.js） ----
   const PL = FxPlot;
