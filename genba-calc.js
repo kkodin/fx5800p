@@ -8,6 +8,9 @@
   const blank = () => ({ k1: null, k2: null, o1: { h: '', s: '' }, o2: { h: '', s: '' }, targets: [], memo: '' });
   let calc = blank();
   let res = null;
+  // 図の状態（表示のしかた・全部／1 点ずつ・いまの測点）
+  const pv = { mode: 'deform', one: false, idx: 0, full: false, plot: null };
+  try { const m = localStorage.getItem('fx5800p-genba-plotmode'); if (['real', 'deform', 'local'].includes(m)) pv.mode = m; } catch { /* 無視 */ }
   const uid = () => ST.uid();
   const settings = () => Object.assign({ angleStyle: 'hyphen', dmsDot: false, zero: 'k1', tol: 0.010 }, state.site && state.site.settings);
   const fa = v => Number.isFinite(v) ? A.format(v, { style: settings().angleStyle }) : '―';
@@ -171,6 +174,7 @@
     const view = $('calcView');
     $('calcNoSite').hidden = !!state.site; view.hidden = !state.site;
     if (!state.site) return;
+    if (pv.plot) { pv.plot.destroy(); pv.plot = null; }
     view.innerHTML = '';
     const st = settings();
     view.append(
@@ -180,6 +184,7 @@
       h('div', { class: 'swap-row' }, [h('button', { type: 'button', id: 'cSwap', class: 'mini', text: '⇅ 既知点1と2を入れ替える' })]),
       knownCard('k2', '既知点2', '次に視準する点'),
       h('div', { class: 'card result', id: 'cResult' }),
+      plotCard(),
       h('h3', { class: 'sec', text: '測点' }),
       h('div', { id: 'tList' }, calc.targets.map(targetCard)),
       h('div', { class: 'bar add-bar' }, [
@@ -193,7 +198,89 @@
         h('button', { type: 'button', id: 'cSave', class: 'primary big', text: '履歴に保存' })
       ])
     );
+    pv.plot = FxPlot.create($('cPlot'), { mode: pv.mode, origin: 'st', label: '既知点・器械点・測点の図' });
     update();
+  }
+  function plotCard() {
+    const seg = (key, items) => h('div', { class: 'seg', role: 'group' }, items.map(([v, t]) => h('button', { type: 'button', ['data-' + key]: v, class: (key === 'pm' ? pv.mode === v : String(pv.one) === v) ? 'on' : '', text: t })));
+    return h('div', { class: 'card plot-card' + (pv.full ? ' full' : ''), id: 'cPlotCard' }, [
+      h('div', { class: 'plot-bar' }, [
+        seg('pm', [['deform', 'デフォルメ'], ['real', '実縮尺'], ['local', '測点まわり']]),
+        seg('pone', [['false', '全部'], ['true', '1点ずつ']]),
+        h('span', { class: 'grow' }),
+        h('button', { type: 'button', class: 'mini', 'data-pa': 'fit', title: '全体を表示（図をダブルクリックでも）', text: '全体' }),
+        h('button', { type: 'button', class: 'mini', 'data-pa': 'full', title: '図を大きく', text: pv.full ? '✕ 戻す' : '⛶ 大きく' })
+      ]),
+      h('div', { class: 'plot-host', id: 'cPlot' }),
+      h('div', { class: 'plot-nav', id: 'cPlotNav', hidden: !pv.one }, [
+        h('button', { type: 'button', class: 'mini', 'data-pa': 'prev', text: '◀' }),
+        h('div', { class: 'plot-now', id: 'cPlotNow' }),
+        h('button', { type: 'button', class: 'mini', 'data-pa': 'next', text: '▶' })
+      ])
+    ]);
+  }
+  // 図に渡す点と線
+  function updatePlot() {
+    if (!pv.plot || !res) return;
+    const pts = [], lines = [];
+    if (calc.k1) pts.push({ id: 'k1', name: calc.k1.name, x: calc.k1.x, y: calc.k1.y, role: 'known' });
+    if (calc.k2) pts.push({ id: 'k2', name: calc.k2.name, x: calc.k2.x, y: calc.k2.y, role: 'known' });
+    if (res.ready) {
+      pts.push({ id: 'st', name: '機械点1', x: res.station.x, y: res.station.y, role: 'station' });
+      lines.push({ from: 'st', to: 'k1', style: 'dash', label: '既知点1' }, { from: 'st', to: 'k2', style: 'dash', label: '既知点2' });
+    }
+    const valid = res.targets.filter(t => Number.isFinite(t.x) && Number.isFinite(t.y));
+    for (const t of valid) {
+      pts.push({ id: t.id, name: t.name || '測点', x: t.x, y: t.y, role: 'target' });
+      if (res.ready && Number.isFinite(t.h)) lines.push({ from: 'st', to: t.id, style: 'solid', label: '角 ' + fa(t.h) + ' / 距 ' + fd(t.s) });
+    }
+    pv.plot.set({ points: pts, lines });
+    // 1 点ずつ
+    const nav = $('cPlotNav'), now = $('cPlotNow');
+    if (nav) nav.hidden = !pv.one;
+    if (pv.one && valid.length) {
+      pv.idx = Math.min(Math.max(pv.idx, 0), valid.length - 1);
+      const t = valid[pv.idx];
+      if (pv.plot.focused !== t.id) pv.plot.focus(t.id);
+      now.innerHTML = '<span class="small">' + (pv.idx + 1) + ' / ' + valid.length + '</span> <b>' + esc(t.name) + '</b>'
+        + (res.ready && Number.isFinite(t.h) ? '<span class="pn-v">角 <b>' + fa(t.h) + '</b>　距 <b>' + fd(t.s) + '</b></span>' : '');
+    } else {
+      if (pv.plot.focused) pv.plot.focus(null);
+      if (now) now.textContent = pv.one ? '測点がありません' : '';
+    }
+  }
+  function plotAction(b) {
+    if (b.dataset.pm) {
+      pv.mode = b.dataset.pm; pv.plot.setMode(pv.mode);
+      try { localStorage.setItem('fx5800p-genba-plotmode', pv.mode); } catch { /* 無視 */ }
+      b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      return true;
+    }
+    if (b.dataset.pone) {
+      pv.one = b.dataset.pone === 'true';
+      b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      if (!pv.one) pv.plot.focus(null);
+      updatePlot(); return true;
+    }
+    const a = b.dataset.pa; if (!a) return false;
+    if (a === 'fit') pv.plot.fit();
+    else if (a === 'full') {
+      pv.full = !pv.full;
+      $('cPlotCard').classList.toggle('full', pv.full);
+      document.documentElement.classList.toggle('plot-full', pv.full);
+      b.textContent = pv.full ? '✕ 戻す' : '⛶ 大きく';
+      setTimeout(() => pv.plot.fit(), 30);
+    } else if (a === 'prev' || a === 'next') { pv.idx += a === 'prev' ? -1 : 1; const n = res.targets.filter(t => Number.isFinite(t.x)).length; if (n) pv.idx = (pv.idx + n) % n; updatePlot(); }
+    return true;
+  }
+  // 測点の行を押したら、その点を図で 1 点ずつ表示する
+  function focusTarget(id) {
+    const valid = res.targets.filter(t => Number.isFinite(t.x) && Number.isFinite(t.y));
+    const i = valid.findIndex(t => t.id === id); if (i < 0) return;
+    pv.one = true; pv.idx = i;
+    document.querySelectorAll('[data-pone]').forEach(x => x.classList.toggle('on', x.dataset.pone === 'true'));
+    updatePlot();
+    if (!pv.full) $('cPlotCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   // 入力を残したまま答えだけ描き直す
   function update() {
@@ -228,6 +315,7 @@
         : 'X ' + f3(t.x) + '　Y ' + f3(t.y) + (res.ready && Number.isFinite(t.az) ? '　方向角 ' + fa(t.az) : '');
       card.querySelector('[data-out="err"]').textContent = t.error;
     });
+    updatePlot();
   }
 
   function setField(path, v) { const [a, b] = path.split('.'); calc[a][b] = v; }
@@ -246,7 +334,13 @@
     });
     view.addEventListener('change', e => { if (e.target.dataset.tf === 'done') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
     view.addEventListener('click', e => guard(async () => {
-      const b = e.target.closest('button'); if (!b) return;
+      const b = e.target.closest('button');
+      if (!b) {
+        const card = e.target.closest('.tcard');
+        if (card && !e.target.closest('input,label')) focusTarget(card.dataset.id);
+        return;
+      }
+      if (b.closest('#cPlotCard') && plotAction(b)) return;
       if (b.dataset.pick) {
         const r = await pickPoints({ title: (b.dataset.pick === 'k1' ? '既知点1（先に視準）' : '既知点2（次に視準）') + 'を選ぶ' });
         if (r) { calc[b.dataset.pick] = r[0]; renderCalc(); saveDraft(); }

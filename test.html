@@ -18,6 +18,7 @@
 <script src="geo.js"></script>
 <script src="points.js"></script>
 <script src="sokusetsu.js"></script>
+<script src="plot.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -199,6 +200,25 @@
   const snap = SK.snapshot(baseCalc(), r1, { tol: 0.01 }, 'メモ');
   test('履歴：入力と答えが残る', 'K1|2|メモ', () => [snap.k1.name, snap.targets.length, snap.memo].join('|'));
   test('履歴の CSV（見出し＋測点 2 行）', 3, () => SK.historyCsv([Object.assign({ time: '2026-11-22T00:00:00Z' }, snap)], v => A.format(v)).trim().split('\r\n').length);
+
+  // ---- 図（plot.js） ----
+  const PL = FxPlot;
+  const pp = [
+    { id: 'st', x: 0, y: 0, role: 'station' }, { id: 'k1', x: 100, y: 0, role: 'known' }, { id: 'k2', x: 0, y: -80, role: 'known' },
+    { id: 'a', x: 1, y: 1, role: 'target' }, { id: 'b', x: 2, y: 0.5, role: 'target' }, { id: 'c', x: -1.5, y: 1.2, role: 'target' }
+  ];
+  const dp = PL.place(pp, 'deform', 'st');
+  const byId = id => dp.find(q => q.p.id === id);
+  test('デフォルメ：方向はそのまま', true, () => pp.filter(p => p.id !== 'st').every(p => { const q = byId(p.id); return near(Math.atan2(q.u, q.v), Math.atan2(p.y, p.x), 1e-9); }));
+  test('デフォルメ：いちばん遠い点が半径 1', 1, () => Math.hypot(byId('k1').u, byId('k1').v), g => near(g, 1, 1e-9));
+  test('デフォルメ：遠い順は変わらない', true, () => { const r = id => Math.hypot(byId(id).u, byId(id).v); return r('k1') > r('k2') && r('k2') > r('b') && r('b') > r('c') && r('c') > r('a'); });
+  test('デフォルメ：2 m の測点が 100 m の既知点の 1/5 以上に見える', true, () => Math.hypot(byId('b').u, byId('b').v) > 0.2);
+  test('実縮尺：座標のまま（右＝Y、上＝X）', '1|1', () => { const q = PL.place(pp, 'real', 'st').find(q => q.p.id === 'a'); return q.u + '|' + q.v; });
+  test('画面に収める：全部の点が枠の中', true, () => {
+    const f = PL.fitTo(dp, 300, 200);
+    return dp.every(q => { const x = 150 + (q.u - f.cu) * f.s, y = 100 - (q.v - f.cv) * f.s; return x >= 0 && x <= 300 && y >= 0 && y <= 200; });
+  });
+  test('縮尺の目盛り：きりのよい長さ', '20', () => String(PL.niceBar(4)));
 
   // ---- 表示 ----
   const ng = rows.filter(r => !r.ok).length;
