@@ -41,7 +41,7 @@
     if (prev == null) return true;
     // 数・変数・閉じかっこ・² などの後なら引き算
     if ((prev >= 0x30 && prev <= 0x39) || (prev >= 0x41 && prev <= 0x5A) || prev === 0x29 || prev === 0x2E || prev === 0x5D || prev === 0x7D) return false;
-    if ([0x8B, 0x9B, 0xAB, 0x8C, 0x9C, 0xCE, 0xC0, 0xC1, 0xD0, 0x0F].includes(prev)) return false;   // ² ⁻¹ ! ° θ Ans Ran# π ᴇ の後
+    if ([0x8B, 0x9B, 0xAB, 0x8C, 0x9C, 0xCE, 0xC0, 0xC1, 0xD0].includes(prev)) return false;   // ² ⁻¹ ! ° θ Ans Ran# π の後（ᴇ の後の - は負の記号）
     return true;
   }
 
@@ -87,6 +87,11 @@
         continue;
       }
       const c = ch.charCodeAt(0);
+      // Z[ ]（拡張変数）の [ は、命令コードがまだ分からないので書き出さない（ASCII の [ にすると実機で別の意味になる）
+      if (ch === '[' || ch === ']') {
+        bad('拡張変数 Z[ ] は、命令コードがまだ分からないので .ccl に書き出せません（実機には手で打ち込んでください）');
+        i++; out.push(0x3F); continue;
+      }
       // 大文字で始まり小文字が続く英単語（DimZ・Println など）は、表にない命令
       const word = src.slice(i).match(/^[A-Z][A-Za-z]*[a-z][A-Za-z]*/);
       if (word) {

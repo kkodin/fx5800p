@@ -400,9 +400,11 @@
   // ---- 電卓（実機）用の測設プログラム ----
   function calcProgramForm() {
     const set = SK.calcPrograms(), res = set.map(p => ({ p, r: FxCcl.toCcl(p) }));
+    const curve = FxSenkei.calcCurvePrograms();
     const total = res.reduce((s, x) => s + x.r.size, 0);
-    const rows = res.map(x => '<tr><td><b>' + esc(x.p.name) + '</b></td><td>' + esc(x.p.title) + '</td><td class="n">' + x.r.size + '</td><td class="small">' + esc(x.p.uses) + '</td></tr>').join('');
-    const pre = h('pre', { class: 'prog-src', text: set.map(p => '■ ' + p.name + '（' + p.title + '）\n' + p.source).join('\n\n') });
+    const rows = res.map(x => '<tr><td><b>' + esc(x.p.name) + '</b></td><td>' + esc(x.p.title) + '</td><td class="n">' + x.r.size + '</td><td class="small">' + esc(x.p.uses) + '</td></tr>').join('')
+      + curve.map(p => '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.title) + '<br><span class="small warn">実機には手で打ち込む（Z[ ] を使うため .ccl はまだ作れない）</span></td><td class="n">―</td><td class="small">' + esc(p.uses) + '</td></tr>').join('');
+    const pre = h('pre', { class: 'prog-src', text: set.concat(curve).map(p => '■ ' + p.name + '（' + p.title + '）\n' + p.source).join('\n\n') });
     D.open({
       title: '電卓（実機）用の測設プログラム', width: 680,
       body: h('div', { class: 'prog-box' }, [
@@ -416,6 +418,12 @@
           h('li', { text: 'PX・PY に測点の座標を入れるたびに HA・HD が出ます。高さありなら PZ（計画高）を入れると、合わせる VD が出ます。AC で終わり' }),
           h('li', { text: 'KANSOKU：NINI のあとで、HA・HD を入れると、その点の座標 X・Y を出します' })
         ]),
+        h('p', { class: 'small', text: '線形（曲線測量）の SENTEI・SENKEI の使い方' }),
+        h('ol', { class: 'small' }, [
+          h('li', { text: 'SENTEI（最初に 1 回）：BP-X・BP-Y（BP の座標）、HOUKOU（BP→IP1 の方向角）、N（曲線の数）、BP-IP（BP〜IP1 の距離）。曲線ごとに R（半径）、IA（交角）、MUKI（右曲線＝1、左曲線＝−1）、IP-IP（次の IP までの距離。最後の曲線では IP-EP＝最後の直線の距離）。曲線ごとに、そのあとの直線の方向角 HOUKOU を出します' }),
+          h('li', { text: 'SENKEI（測るたび）：KAIHOU で出た -FX-・-FY- がそのまま出るので EXE。TYOKUSEN（第何直線）か KYOKUSEN（第何曲線）、KYORI（BP からの距離）、MIGI／HIDARI（右・左に何 mm）を出します。どの区間の範囲にも入らないときは SOTO と出ます' }),
+          h('li', { text: 'SENTEI・SENKEI は KAIHOU の変数（A〜D・G・H・K）を書き換えないので、KAIHOU → SENKEI → KAIHOU と続けて使えます。線形は Z[1] から Z[11N+6] に覚えます' })
+        ]),
         h('p', { class: 'small warn', text: '⚠ NINI は A〜Z の変数を全部使います。KAIHOU などほかのプログラムの値（A〜D の後視点・機械点など）は書き換わります。' }),
         pre,
         h('p', { class: 'small', text: '.ccl は CcLinker で電卓へ送れる形式です。手元の電卓から吸い出した 11 本で形式を確かめましたが、このプログラムを実機へ送って動かすのは、まだ確かめていません。SUB（HADI・OBXY）も一緒に送ってください。' })
@@ -427,20 +435,23 @@
             const KEY = 'fx5800p-emu-v1';
             const d = JSON.parse(localStorage.getItem(KEY) || '{}');
             d.programs = Array.isArray(d.programs) ? d.programs : [];
-            for (const p of set) {
+            for (const p of set.concat(curve)) {
               const item = { name: p.name, mode: 'COMP', source: p.source };
               const i = d.programs.findIndex(x => x.name === p.name);
               if (i >= 0) d.programs[i] = item; else d.programs.push(item);
             }
             localStorage.setItem(KEY, JSON.stringify(d));
-            toast('電卓アプリに ' + set.map(p => p.name).join('・') + ' を入れました（MODE → PROG → RUN → NINI）');
+            toast('電卓アプリに ' + set.concat(curve).map(p => p.name).join('・') + ' を入れました（MODE → PROG → RUN）');
           } catch (e) { toast('入れられませんでした：' + e.message); return false; }
           return false;
         } },
         { label: '.ccl をまとめて書き出す（zip）', kind: 'primary', onClick: async () => {
           const ng = res.filter(x => !x.r.ok);
           if (ng.length) { toast('書き出せません：' + ng.map(x => x.p.name + ' ' + x.r.problems.map(q => q.msg).join('／')).join('、')); return false; }
-          const zip = FxZip.make(res.map(x => ({ name: x.r.fileName, data: x.r.bytes })).concat([{ name: 'NINI一式の説明.txt', data: '﻿' + set.map(p => p.name + '：' + p.title + '\r\n使う変数：' + p.uses + '\r\n' + p.source.replace(/\n/g, '\r\n')).join('\r\n\r\n') }]));
+          const txt = list => '﻿' + list.map(p => p.name + '：' + p.title + '\r\n使う変数：' + p.uses + '\r\n' + p.source.replace(/\n/g, '\r\n')).join('\r\n\r\n');
+          const zip = FxZip.make(res.map(x => ({ name: x.r.fileName, data: x.r.bytes })).concat([
+            { name: 'NINI一式の説明.txt', data: txt(set) },
+            { name: '手入力用_SENTEI_SENKEI.txt', data: '﻿実機には、この文を見ながら手で打ち込んでください（Z[ ] を使うため .ccl はまだ作れません）。\r\n「ᴇ」は ×10x キー、「≤」「≥」は比較の記号、「▸DMS」は °′″ の SHIFT です。\r\n\r\n' + txt(curve).slice(1) }]));
           const how = await GB.download('NINI一式-' + GB.today() + '.zip', new Uint8Array(await zip.arrayBuffer()), 'application/zip');
           if (how) toast('NINI 一式（' + set.length + ' 本）を書き出しました');
           return false;

@@ -24,6 +24,7 @@
 <script src="cclwrite.js"></script>
 <script src="engine.js"></script>
 <script src="basic.js"></script>
+<script src="senkei.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -296,6 +297,43 @@
     while (!r.done && n++ < 50) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
     return shown.join('|');
   });
+
+  // ---- 線形（senkei.js）：曲線総合プログラムと同じ式 ----
+  const SN = FxSenkei;
+  // 予測：曲線総合プログラムの仕様書 60.8 章の検算例
+  test('予測点（60.8 章の検算例 22.1315・2.5676）', true, () => { const k1 = { x: 10 + 10 * Math.cos(10 * Math.PI / 180), y: 10 * Math.sin(10 * Math.PI / 180) }; const r = SN.predict(k1, { x: 10, y: 0 }, { x: 0, y: 0 }, { x: -10, y: 0 }, 2.43); return near(r.x, 22.1315, 0.0001) && near(r.y, 2.5676, 0.0001); });
+  test('予測：進む長さを省くと 1 本目と 2 本目の先頭の距離', true, () => near(SN.predict({ x: 19.848, y: 1.736 }, { x: 10, y: 0 }, { x: 0, y: 0 }, { x: -10, y: 0 }).len, Math.hypot(19.848, 1.736), 1e-9));
+  // 例の線形：BP (1000,2000)、方向角 30°、BP〜IP1 50、曲線1 R=100 右 30°、IP1〜IP2 60、曲線2 R=80 左 20°、IP2〜EP 40
+  const AL = { bp: { x: 1000, y: 2000 }, az: 30, L0: 50, curves: [{ R: 100, dir: 'R', ia: 30 }, { R: 80, dir: 'L', ia: 20, L: 60 }], Lf: 40 };
+  const GM = SN.build(AL);
+  test('線形：最後の方向角 ＝ 30＋30−20', 40, () => GM.sections[GM.sections.length - 1].az * 180 / Math.PI, g => near(g, 40, 1e-9));
+  test('線形：曲線1 の BC は BP から 50−TL', 50 - 100 * Math.tan(15 * Math.PI / 180), () => GM.curves[0].startDist, g => near(g, 50 - 100 * Math.tan(15 * Math.PI / 180), 1e-9));
+  // 照合：曲線1 の中ほど（中心から R−0.015 → 右へ 15mm）、直線 2 の途中で左へ 30mm
+  const c1 = GM.curves[0], mid = (Math.atan2(c1.bc.y - c1.ro.y, c1.bc.x - c1.ro.x) + 15 * Math.PI / 180);
+  const P1 = { x: c1.ro.x + (100 - 0.015) * Math.cos(mid), y: c1.ro.y + (100 - 0.015) * Math.sin(mid) };
+  const sec2 = GM.sections[1], P2 = { x: sec2.a.x + 10 * Math.cos(sec2.az) + 0.030 * Math.cos(sec2.az - Math.PI / 2), y: sec2.a.y + 10 * Math.sin(sec2.az) + 0.030 * Math.sin(sec2.az - Math.PI / 2) };
+  test('照合：曲線1 の右 15mm', '第1曲線 右|右|15.0', () => { const r = SN.judge(GM, P1); return r.name + '|' + r.side + '|' + r.errorMm.toFixed(1); });
+  test('照合：第2直線の左 30mm、BP から', '第2直線|左|30.0|' + (sec2.accStart + 10).toFixed(3), () => { const r = SN.judge(GM, P2); return r.name + '|' + r.side + '|' + r.errorMm.toFixed(1) + '|' + r.distFromBP.toFixed(3); });
+  // 実機用 SENTEI・SENKEI を電卓アプリで動かし、上と同じ答えになるか
+  const CSET = SN.calcCurvePrograms();
+  const runWith = (vars, name, inputs) => {
+    const shown = [], io = { print: t => shown.push(String(t).trim()), printValue: t => shown.push(String(t).trim()), locate() {}, cls() {} };
+    const g = FxBasic.run(CSET.find(p => p.name === name), { vars, io, library: CSET });
+    let r = g.next(), n = 0;
+    while (!r.done && n++ < 800) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+    return shown;
+  };
+  const newVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') v[L] = 0; return v; };
+  const CV = newVars();
+  const senteiOut = runWith(CV, 'SENTEI', ['1000', '2000', '30', '2', '50', '100', '30', '1', '60', '80', '20', '-1', '40']);
+  test('SENTEI：直線の方向角を順に出す', 'HOUKOU|60°0\'0"|HOUKOU|40°0\'0"', () => senteiOut.filter(s => s !== '').slice(0, 4).join('|'));
+  test('SENTEI：EP までの距離が線形と同じ', GM.total.toFixed(3), () => senteiOut[senteiOut.length - 1]);
+  test('SENTEI：曲線1 の中心が線形と同じ', true, () => near(CV.__z[5 * 2 + 6 * 1 + 1 - 26 + 25], GM.curves[0].ro.x, 1e-6));
+  const judgeOut = p => { const v = JSON.parse(JSON.stringify(CV)); return runWith(v, 'SENKEI', [String(p.x), String(p.y)]).join('|'); };
+  test('SENKEI：曲線1 の右 15mm（線形と同じ）', 'KYOKUSEN|1.000|KYORI|' + SN.judge(GM, P1).distFromBP.toFixed(3) + '|MIGI(MM)|15.0', () => judgeOut(P1));
+  test('SENKEI：第2直線の左 30mm（線形と同じ）', 'TYOKUSEN|2.000|KYORI|' + SN.judge(GM, P2).distFromBP.toFixed(3) + '|HIDARI(MM)|30.0', () => judgeOut(P2));
+  test('SENKEI・SENTEI は .ccl にしない（Z[ のコードが未確認）', false, () => CC.toCcl(CSET[0]).ok || CC.toCcl(CSET[1]).ok);
+  test('.ccl：ᴇ の後の - は負の記号', '31 0f 87 37', () => hex(CC.encode('1ᴇ-7').bytes));
 
   // ---- 図（plot.js） ----
   const PL = FxPlot;
