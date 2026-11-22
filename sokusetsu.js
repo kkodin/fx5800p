@@ -183,7 +183,19 @@
       '"Y":Y◢',
       'Goto 2'
     ].join('\n');
+    // TYOKUSEN（直した版）：KAIHOU の答え X・Y が直線（IP の T・S、方向角 M）の右か左か。
+    //   元の版は cos⁻¹ で角度を求め直していたため、点が IP より西（Y が小さい）だと狂った（改修案 21 章）
+    const tyokusen = [
+      '"IP-X"?T:"IP-Y"?S:?X:?Y',
+      'Pol(X-T,Y-S)',
+      '"IA"?M',
+      'sin(J-M)×I→N',
+      'If N<0:Then "HIDARI":Abs(N)',
+      'Else "MIGI":Abs(N)',
+      'IfEnd'
+    ].join('\n');
     return [
+      { name: 'TYOKUSEN', mode: 'COMP', source: tyokusen, title: '直線の右・左（直した版。KAIHOU の X・Y を使う）', uses: '読む X・Y／書く T・S・M・N・I・J（KAIHOU の A〜D・G・H・K は使わない）' },
       { name: 'NINI', mode: 'COMP', source: nini, title: '任意点設置と測設（既知点 N 点・高さ）', uses: 'A〜I・J・K・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z（全部）' },
       { name: 'HADI', mode: 'COMP', source: hadi, title: 'SUB：測点への角度と距離', uses: '読む U・V・W・X・Y／書く I・J・K' },
       { name: 'OBXY', mode: 'COMP', source: obxy, title: 'SUB：観測から座標', uses: '読む U・V・W・H・L／書く I・J・X・Y' },

@@ -268,6 +268,33 @@
   test('一式：全部 .ccl にできる', '', () => SET.map(p => CC.toCcl(p).problems.map(x => p.name + ':' + x.msg).join('／')).join(''));
   test('一式：文法チェック', true, () => SET.every(p => FxBasic.check(p.source)));
   test('一式：全部で 1,000 バイト以下', true, () => SET.reduce((s, p) => s + CC.toCcl(p).size, 0) <= 1000);
+  // TYOKUSEN（直した版）：方向角 9 通り × 右・左 ＝ 18 通り
+  test('TYOKUSEN：18 通りすべて正しい', '', () => {
+    const bad = [];
+    for (const M of [0, 10, 45, 90, 150, 200, 225, 270, 330]) for (const side of [1, -1]) {
+      const a = M * Math.PI / 180, b = (M + 90 * side) * Math.PI / 180;
+      const p = [100 + 10 * Math.cos(a) + 0.03 * Math.cos(b), 200 + 10 * Math.sin(a) + 0.03 * Math.sin(b)];
+      const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+      vars.X = p[0]; vars.Y = p[1];
+      const out = [], io = { print: t => out.push(String(t).trim()), printValue: t => out.push(String(t).trim()), locate() {}, cls() {} };
+      const g = FxBasic.run(SET.find(q => q.name === 'TYOKUSEN'), { vars, io, library: SET });
+      const inputs = ['100', '200', '', '', String(M)]; let r = g.next(), n = 0;
+      while (!r.done && n++ < 50) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+      const txt = out.concat(r.done && r.value && r.value.lastText ? [r.value.lastText] : []).join(' ');
+      const want = side > 0 ? 'MIGI' : 'HIDARI';
+      if (!new RegExp('^' + want + ' 0\\.03').test(txt)) bad.push(M + '°' + want + '→' + txt);
+    }
+    return bad.join('／');
+  });
+  test('TYOKUSEN：点が IP の真東でもエラーにならない', true, () => {
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    vars.X = 0; vars.Y = 10; vars.H = 123;
+    const io = { print() {}, printValue() {}, locate() {}, cls() {} };
+    const g = FxBasic.run(SET.find(q => q.name === 'TYOKUSEN'), { vars, io, library: SET });
+    const inputs = ['0', '0', '', '', '90']; let r = g.next(), n = 0;
+    while (!r.done && n++ < 50) { if (r.value.type === 'input') { if (!inputs.length) break; r = g.next(inputs.shift()); } else r = g.next(); }
+    return vars.H === 123;   // KAIHOU の角度 H も消えない
+  });
   // 既知点 2 点（例題）：器械点 1020・2040、No.1 は 161-33-56 前後・14.142
   test('NINI：既知点 2 点・高さなし', 'OX|1020.000|OY|2040.000|HD|14.142', () => {
     const r = runCalc('NINI', ['0', '2', '1000', '2000', '0', '44.721', '1050', '2080', '169°41°43°', '50', '1030', '2050']);
