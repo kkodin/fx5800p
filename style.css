@@ -63,6 +63,9 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .ln.tap { cursor: pointer; }
 /* 見やすい表示：行の右に小さく出す変数の名前 */
 .ln .lhint { float: right; margin-left: .6em; max-width: 72%; overflow: hidden; text-overflow: ellipsis; font: 600 .6em/2.03 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; opacity: .8; }
+.dms-part { padding: 0; border: 0; border-radius: 2px; background: transparent; line-height: 1; vertical-align: baseline; }
+.dms-part[aria-pressed="true"] { background: var(--ink); color: var(--lcd); }
+.lcd-pick { border: 1px solid #496548; border-radius: 4px; background: #d6e1c9; color: #233921; padding: 0 .45em; font: 700 .62em/1.65 system-ui, sans-serif; vertical-align: middle; }
 .cur { background: var(--ink); color: var(--lcd); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { background: transparent; color: inherit; } }
 .probe { position: absolute; visibility: hidden; white-space: pre; font-size: 20px; }
@@ -76,21 +79,24 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 
 /* 液晶の下の細い帯 */
 .bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 0 0 auto; }
+.bar:not(:has(.mini:not([hidden]), .cands:not([hidden]))) { display: none; }
 .bar .mini { white-space: nowrap; }
 .result-text { display: block; width: 100%; max-height: 50dvh; padding: .6em; resize: vertical; font: inherit; }
 .result-status { margin: .6em 0 0; }
 .mini { background: #33363c; border: 1px solid #4a4e55; border-radius: 12px; font-size: 12px; padding: 3px 10px; color: #cfd3d8; }
 .mini.on { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; }
-.ver { margin-left: auto; font-size: 10px; color: #999; }
+.ver { position: absolute; right: 12px; bottom: 0; font: 700 8px/9px system-ui, sans-serif; color: #3d464c; }
 
 /* MODE・FUNCTION と REPLAY */
-.top { display: grid; grid-template-columns: 1fr 1fr 2.2fr; align-items: end; gap: 6px; flex: 0 0 auto; padding: 0 4px; }
+.top { display: grid; grid-template: "mode func cursor" auto / 1fr 1fr 2.2fr; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 4px; }
+.calc.cursor-left .top { grid-template: "cursor mode func" auto / 2.2fr 1fr 1fr; }
 .round { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.round.r2 { transform: translateY(6px); }
+.round:first-child { grid-area: mode; }
+.round.r2 { grid-area: func; }
 .round .lab { font-size: 10px; font-weight: 700; color: #f2f2f2; letter-spacing: .02em; }
 .round .lab em { color: var(--sl); font-style: normal; }
-.rkey { width: clamp(38px, 11vw, 50px); aspect-ratio: 1; border-radius: 50%; border: 1px solid #0c0c0d; background: radial-gradient(circle at 40% 30%, #4a4c51, #26272a 70%); box-shadow: 0 3px 0 #08090a; }
-.pad { position: relative; height: clamp(62px, 9.5dvh, 86px); border-radius: 44px; background: radial-gradient(ellipse at 50% 30%, #6a6d74, #3a3c41 70%); border: 1px solid #0c0c0d; box-shadow: 0 3px 0 #08090a; display: grid; grid-template-columns: 1fr 1.4fr 1fr; grid-template-rows: 1fr 1fr 1fr; overflow: hidden; }
+.rkey { width: clamp(33px, 9.5vw, 44px); aspect-ratio: 1; border-radius: 50%; border: 1px solid #0c0c0d; background: radial-gradient(circle at 40% 30%, #4a4c51, #26272a 70%); box-shadow: 0 3px 0 #08090a; }
+.pad { grid-area: cursor; justify-self: center; width: min(100%, calc(94% * var(--pad-scale, 1))); position: relative; height: clamp(42px, calc(7.3dvh * var(--pad-scale, 1)), 84px); border-radius: 44px; background: radial-gradient(ellipse at 50% 30%, #6a6d74, #3a3c41 70%); border: 1px solid #0c0c0d; box-shadow: 0 3px 0 #08090a; display: grid; grid-template-columns: 1fr 1.4fr 1fr; grid-template-rows: 1fr 1fr 1fr; overflow: hidden; }
 .pad button { border: 0; background: transparent; color: #d9dbe0; font-size: 12px; }
 .pad .p-up { grid-column: 2; grid-row: 1; }
 .pad .p-left { grid-column: 1; grid-row: 1 / 4; }
@@ -163,7 +169,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .calc.free .blk-upper { --k-fn: clamp(9px, min(2.7cqw, 4.2cqh), 26px); --k-small: clamp(8px, min(2.4cqw, 3.8cqh), 22px); --k-sub: clamp(7px, min(1.7cqw, 2.6cqh), 15px); }
 .calc.free .blk-nkeys { --k-num: clamp(12px, min(5.2cqw, 9cqh), 44px); --k-big: clamp(11px, min(4cqw, 7cqh), 34px); --k-sub: clamp(7px, min(2cqw, 3.4cqh), 15px); }
 .calc.free .rkey { width: clamp(30px, min(11cqw, 17cqh), 80px); }
-.calc.free .pad { height: clamp(48px, 22cqh, 130px); }
+.calc.free .pad { height: clamp(42px, calc(18cqh * var(--pad-scale, 1)), 112px); }
 .calc.free .round .lab, .calc.free .pad .replay { font-size: calc(10px * var(--fs, 1)); }
 .calc.free .bar .mini { font-size: calc(12px * var(--fs, 1)); }
 /* 配置を変えている間 */
@@ -264,7 +270,6 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .cd { flex: 0 0 auto; background: #3a3f48; color: #f1f3f6; border: 1px solid #5a606b; border-radius: 12px; padding: 2px 10px; font: 600 13px "Consolas", "Menlo", monospace; }
 .cd.sel { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; }
 .bar .ver[hidden] { display: none; }
-.bar .mini.xy { background: #2f6f4f; border-color: #3f8f66; color: #fff; font-weight: 700; }
 .bar .mini[hidden] { display: none; }
 /* 座標一覧から入れる（pickxy.js） */
 .px-form { display: flex; flex-direction: column; gap: 8px; }

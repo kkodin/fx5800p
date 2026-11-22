@@ -6,6 +6,7 @@
 (function (root) {
   'use strict';
   const FS = [0.8, 0.9, 1, 1.15, 1.3];
+  const CURSOR_SCALE = [0.85, 1, 1.25];
   const BLOCKS = ['lcd', 'upper', 'nkeys', 'tabs'];
   const NAMES = { lcd: 'ディスプレイ', upper: '上のボタン', nkeys: 'テンキー', tabs: 'タブの画面' };
   const DEF = {
@@ -26,7 +27,7 @@
     else if (!open) opt.onApply(info);
   }
 
-  function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
+  function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, cursorSize: 2, cursorSide: 'right', portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
   function fix(s) {
     const d = defaults();
     s = Object.assign(d, s || {});
@@ -38,6 +39,8 @@
     // ディスプレイ：wide＝見やすい表示（行・桁を増やす）、real＝実機と同じ 16 桁×4 行
     if (!['wide', 'real'].includes(s.lcd)) s.lcd = 'wide';
     if (!(s.lcdFont >= 1 && s.lcdFont <= 5)) s.lcdFont = 3;
+    if (![1, 2, 3].includes(s.cursorSize)) s.cursorSize = 2;
+    if (!['left', 'right'].includes(s.cursorSide)) s.cursorSide = 'right';
     if (!['auto', 'portrait', 'landscape'].includes(s.orient)) s.orient = 'auto';
     if (!Array.isArray(s.presets)) s.presets = [];
     return s;
@@ -58,6 +61,8 @@
     calc.classList.toggle('free', free);
     calc.classList.toggle('rotated', rotated);
     calc.classList.toggle('lo-landscape', o === 'landscape');
+    calc.classList.toggle('cursor-left', st.cursorSide === 'left');
+    calc.style.setProperty('--pad-scale', CURSOR_SCALE[st.cursorSize - 1]);
     if (free || rotated) {
       const width = free ? W : Math.min(W, 480);
       calc.style.width = width + 'px'; calc.style.height = H + 'px';
@@ -243,6 +248,10 @@
           seg([['standard', '標準の並び'], ['free', '自由配置']], st[info.orient].mode, v => { st[info.orient].mode = v; save(); apply(); updNote(); }),
           h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
+        h('div', {}, [h('h4', { text: 'カーソルキーの位置' }),
+          seg([['left', '左'], ['right', '右']], st.cursorSide, v => { st.cursorSide = v; save(); apply(); }),
+          h('h4', { text: 'カーソルキーの大きさ' }),
+          seg([[1, '小'], [2, '標準'], [3, '大']], st.cursorSize, v => { st.cursorSize = v; save(); apply(); })]),
         h('div', {}, [h('h4', { text: '名前を付けて保存（いまの向きの配置と文字の大きさ）' }),
           h('div', { class: 'lo-new' }, [nameIn, h('button', { type: 'button', text: '保存', onclick: () => {
             const n = nameIn.value.trim(); if (!n) { nameIn.focus(); return; }

@@ -1,7 +1,7 @@
 // プログラムの日本語の名前・使い方・変数の名前（アプリだけが読む ' の行にして、プログラムの頭に付ける）
 //   電卓（実機）へ送るときは ' の行は消える（cclwrite.js）ので、バイト数は変わらない
 //   FxProgInfo.attach('NINI', 本文) → ' の行を付けた文
-//   FxProgInfo.addToKnown(programs) → 電卓アプリの手持ちのプログラム（KAIHOU など）に、中身が元と同じときだけ説明を付ける
+//   FxProgInfo.addToKnown(programs) → 手持ちのプログラムに、本文で確認できた説明を補う
 (function (root) {
   'use strict';
   const INFO = {
@@ -93,6 +93,27 @@
     KYOKUSEN: '"TYUUSIN-X-"?V:"TYUUSIN-Y-"?W:"-FX-"?X:"-FY-"?Y\nPol(X-V,Y-W)\n"-R-"?R\nIf R>0:Then Abs(R)-I→N:Else I-Abs(R)→N:IfEnd\nIf N<0:Then "HIDARI":Abs(N):Else "MIGI":N:IfEnd'
   };
 
+  // 手持ちの版で見つかった入力・出力と、その日本語表記。計算本文は登録しない。
+  const GUIDES = {
+    HERON: { name: '三角形の面積・高さ（ヘロンの公式）', summary: '底辺と残り2辺の長さから三角形の面積と底辺に対する高さを求める',
+      signs: ['MENSEKI', 'TAKASA'], prompts: { 'TEIHEN-A': '底辺 A の長さ', 'HEN-A': '辺 A の長さ', 'HEN-B': '辺 B の長さ', 'HEN-C': '辺 C の長さ' } },
+    KYOUKAKU: { name: '二辺とその間の角から三角形を求める', summary: '二辺の長さとその間の角から、余弦定理で残りの辺を求める',
+      signs: ['HEN-A', 'HEN-B', 'KAKU-A'], prompts: { 'HEN-A': '辺 A の長さ', 'HEN-B': '辺 B の長さ', 'KAKU-A': '二辺の間の角度' } },
+    KAKUDO: { name: '三辺から三角形の角を求める', summary: '三辺の長さから余弦定理で三つの角度を求める',
+      signs: ['KAKU-A', 'KAKU-B', 'KAKU-C'], prompts: { 'HEN-A': '辺 A の長さ', 'HEN-B': '辺 B の長さ', 'HEN-C': '辺 C の長さ' } },
+    TYOKUSEN: { name: INFO.TYOKUSEN.name, summary: INFO.TYOKUSEN.summary,
+      signs: ['IP-X', 'IP-Y', 'MIGI'], prompts: { 'IP-X': '直線の起点（IP）の X', 'IP-Y': '直線の起点（IP）の Y', X: '測った点の X', Y: '測った点の Y', IA: '直線の方向角' } },
+    KAIHOU: { name: INFO.KAIHOU.name, summary: INFO.KAIHOU.summary, signs: ['FX', 'FY', 'Rec('],
+      prompts: { KYORI: '水平距離', KAKUDO: '水平角', L: '水平距離', Θ: '水平角' } },
+    KYOKUSEN: { name: INFO.KYOKUSEN.name, summary: INFO.KYOKUSEN.summary, signs: ['TYUUSIN', 'MIGI', 'HIDARI'],
+      prompts: { 'TYUUSIN-X': '曲線の中心の X', 'TYUUSIN-Y': '曲線の中心の Y', FX: '測った点の X', FY: '測った点の Y', R: '曲線の半径' } }
+  };
+  const ALIASES = { TYOKUSENN: 'TYOKUSEN', THOKUSEN: 'TYOKUSEN', ST: 'TYOKUSEN', TRV: 'KAIHOU' };
+  function canonicalName(name) {
+    const key = String(name || '').trim().toUpperCase();
+    return ALIASES[key] || key;
+  }
+
   const isNote = l => /^\s*'/.test(l);
   function lines(name) {
     const d = INFO[name]; if (!d) return [];
@@ -129,14 +150,37 @@
     try { for (const p of (root.FxSenkei ? root.FxSenkei.calcCurvePrograms() : [])) r[p.name] = p.source; } catch (e) { /* 同上 */ }
     return r;
   }
-  // 取り込んだ文を整える：説明の .txt なら本文だけにし、元と同じ中身なら日本語の名前・使い方・変数の名前を付ける
+  function guideFor(name, src, references) {
+    const canonical = canonicalName(name);
+    if (INFO[canonical] && references[canonical] && norm(src) === norm(references[canonical])) return INFO[canonical];
+    const guide = GUIDES[canonical];
+    if (!guide) return null;
+    const body = String(src || '').split('\n').filter(line => !isNote(line)).join('\n');
+    const upper = body.toUpperCase();
+    if (!guide.signs.every(mark => upper.includes(mark.toUpperCase()))) return null;
+    const vars = {};
+    const input = /(?:"([^"\r\n]*)"\s*)?\?\s*(?:→\s*)?([A-Zθ])(?=\s*(?:[:◢\n]|$))/g;
+    for (const [, label, variable] of body.matchAll(input)) {
+      const prompt = (label || variable).normalize('NFKC').toUpperCase().trim().replace(/^-+|-+$/g, '');
+      const caption = guide.prompts[prompt];
+      if (caption) vars[variable] = caption;
+    }
+    return { name: guide.name, summary: guide.summary, vars, usage: [], help: [] };
+  }
+  // 取り込んだ本文・手入力の説明はそのままにし、確認できる説明だけ補う。
   function tidy(name, text, R) {
     let src = String(text || '').replace(/\r\n?/g, '\n');
     const g = fromGuide(src);
     if (g !== null) src = g;
-    R = R || refs();
-    if (INFO[name] && R[name] && norm(src) === norm(R[name])) src = attach(name, src);
-    return src;
+    const d = guideFor(name, src, R || refs()), basic = root.FxBasic;
+    if (!d || !basic) return src;
+    const md = basic.meta(src), added = [];
+    if (!md.title) added.push("'名前 " + d.name);
+    if (!md.summary) added.push("'説明 " + d.summary);
+    if (!md.usage.length) for (const text of d.usage) added.push("'使い方 " + text);
+    for (const [key, value] of Object.entries(d.vars)) if (!md.vars[key]) added.push("'変数 " + key + '=' + value);
+    if (!md.help) for (const text of d.help) added.push("'解説 " + text);
+    return added.length ? added.join('\n') + '\n' + src : src;
   }
   // 電卓アプリのプログラムに説明を付ける（説明の .txt をそのまま取り込んだものは本文だけに直す）
   // 戻り値：{ done: [名前], fixed: [名前], skipped: [{ name, why }] }
@@ -144,12 +188,15 @@
     const done = [], fixed = [], skipped = [];
     const R = refs();
     for (const p of programs) {
-      const g = fromGuide(p.source);
-      if (g !== null) { p.source = g; fixed.push(p.name); }
-      if (!INFO[p.name] || !R[p.name]) continue;
-      if (norm(p.source) !== norm(R[p.name])) { skipped.push({ name: p.name, why: KNOWN[p.name] ? '中身が電卓から吸い出した元のものと違うので、付けませんでした' : '中身がアプリの実機用の一式と違うので、付けませんでした' }); continue; }
-      p.source = attach(p.name, p.source);
-      done.push(p.name);
+      const before = p.source, g = fromGuide(before), src = tidy(p.name, before, R);
+      const key = canonicalName(p.name), known = guideFor(p.name, g === null ? before : g, R);
+      if (!known && g === null) {
+        if (INFO[key] || GUIDES[key]) skipped.push({ name: p.name, why: '対応する本文を確認できませんでした' });
+        continue;
+      }
+      if (g !== null) fixed.push(p.name);
+      if (src !== (g === null ? before : g)) done.push(p.name);
+      p.source = src;
     }
     return { done, fixed, skipped };
   }
@@ -157,7 +204,7 @@
   function report(r) {
     const t = [];
     if (r.fixed.length) t.push(r.fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました。');
-    if (r.done.length) t.push(r.done.join('・') + ' に日本語の名前・使い方・変数の名前を付けました。');
+    if (r.done.length) t.push(r.done.join('・') + ' の日本語説明を追加しました。');
     if (!t.length) t.push('説明を付けたプログラムはありません。');
     if (r.skipped.length) t.push('付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）');
     return t.join('　');

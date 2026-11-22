@@ -250,7 +250,7 @@
             const cur = read(c.target);
             for (;;) {
               // prog・target：どのプログラムのどの変数に入れるか（アプリで日本語の名前を出すため）
-              const raw = yield { type: 'input', label, keep: c.keep, current: cur, currentText: E.formatNumber(cur, state.disp), prog: f.name, target: c.target.kind === 'var' ? c.target.name : (c.target.letter ? c.target.letter + '[' + c.target.index + ']' : null) };
+              const raw = yield { type: 'input', label, keep: c.keep, current: cur, currentText: E.formatNumber(cur, state.disp), angle: state.angle, prog: f.name, target: c.target.kind === 'var' ? c.target.name : (c.target.letter ? c.target.letter + '[' + c.target.index + ']' : null) };
               if ((raw === '' || raw == null) && c.keep) break;
               if (raw === '' || raw == null) continue;
               const r = calc(raw);

@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.12';
+  const VERSION = '1.4.13';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -166,8 +166,6 @@
       : $('editor').inputMode === 'text' ? 'キーボードを閉じる' : 'キーボードで編集';
     const resultBtn = $('resultBtn');
     if (resultBtn) resultBtn.hidden = !currentResult();
-    // 値を聞かれている間だけ「座標一覧から」を出す
-    $('xyBtn').hidden = !(mode === 'run' && run && !run.done && run.wait && run.wait.type === 'input');
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
     document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
@@ -620,7 +618,10 @@
     if (mode === 'edit') return editInsert(s);
     if (mode === 'calc' || mode === 'solve') return substInsert(mode === 'calc' ? calc : solve, s);
     if (mode === 'fmla' && fm.phase === 'input') return substInsert(fm, s);
-    if (mode === 'run' && run && run.wait && run.wait.type === 'input') { run.inToks.splice(run.inCur, 0, s); run.inCur++; return; }
+    if (mode === 'run' && run && run.wait && run.wait.type === 'input') {
+      if (!run.dms) { run.inToks.splice(run.inCur, 0, s); run.inCur++; }
+      return;
+    }
     if (mode === 'name') { nameIn.text += s; }
   }
 
@@ -975,7 +976,7 @@
       label: p.name + (p.mode === 'Formula' ? ' ·FM' : ''), key: p.name,
       // プログラムの中の '説明 と '解説 の行（アプリだけが読む）
       // '名前（日本語の名前）・'説明・'使い方・'変数・'解説 の行（アプリだけが読む）
-      ...(md => ({ title: md.title, desc: md.summary || p.title || '', help: (md.help || md.usage.length || Object.keys(md.vars).length) ? B.helpText(p.name, p.source) : '' }))(B.meta(p.source)),
+      ...(md => ({ title: md.title, desc: md.summary || p.title || '', help: (md.summary || md.help || md.usage.length || Object.keys(md.vars).length) ? B.helpText(p.name, p.source) : '' }))(B.meta(p.source)),
       act: () => {
         if (kind === 'RUN') { if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list'); }
         else if (kind === 'EDIT') { if (bigScreen()) openPcEditor('p=' + encodeURIComponent(p.name)); else openEditor(p); }
@@ -1171,21 +1172,24 @@
         const ev = st.value;
         if (ev.type === 'tick') { render(); setTimeout(() => pump(), 0); return; }
         if (ev.type === 'input') {
-          token.wait = ev; token.inToks = []; token.inCur = 0;
-          if (token.grid.wide) {
+          token.wait = ev; token.inToks = []; token.inCur = 0; token.dms = startDms(ev);
+          token.coordinate = token.dms ? null : coordinateField(ev);
+          if (token.grid.wide || token.coordinate) {
             // 見やすい表示：聞かれた行の「?」の右に入力し、変数の名前を右に小さく出す。前の入力・答えは上に残す
             io.print(ev.label + '?', false);
             const g = token.grid;
             token.inRow = g.row - 1;
             token.inPrefix = g.rows[token.inRow].join('').replace(/\s+$/, '') + ' ';
             token.keepText = ev.keep ? ev.currentText : '';
-            g.hints[token.inRow] = runHint();
+            if (g.wide) g.hints[token.inRow] = runHint();
             render(); return;
           }
           io.print(ev.label + '?', false);
-          if (ev.keep) io.printValue(ev.currentText, false); else gridNewLine(token.grid);
-          token.inRow = Math.min(token.grid.row - (ev.keep ? 1 : 0), 3);
-          if (!ev.keep) token.grid.row = Math.min(token.grid.row, 3);
+          const hasValue = ev.keep || token.dms;
+          if (hasValue) io.printValue(token.dms ? dmsDisplay(token.dms) : ev.currentText, false);
+          else gridNewLine(token.grid);
+          token.inRow = Math.min(token.grid.row - (hasValue ? 1 : 0), 3);
+          if (!hasValue) token.grid.row = Math.min(token.grid.row, 3);
           render(); return;
         }
         if (ev.type === 'pause') { token.wait = ev; render(); return; }
@@ -1207,64 +1211,178 @@
     return B.meta(p.source).vars[w.target] || '';
   }
   function setHint(text) { hintName = text || ''; }
-  // 座標一覧から選んだ値を、いま聞かれている入力から順に入れて EXE する（X→Y なら 2 つ続けて）
-  function fillRunInputs(vals) {
-    vals = vals.slice();
+  const DMS_WIDTH = [3, 2, 2];
+  const DMS_LABELS = ['度', '分', '秒'];
+  function startDms(input) {
+    if (!window.FxAngle) return null;
+    const label = input.label.normalize('NFKC').toUpperCase().replace(/^[\s-]+|[\s-]+$/g, '');
+    const isAngle = /^(?:KAKUDO|KAKU(?:-[ABC])?|HA|VA|IA|AZ|AZIMUTH|ANGLE|HORIZONTAL ANGLE|VERTICAL ANGLE|HOUKOU|HOKO|THETA|Θ)$/.test(label)
+      || /角度|水平角|鉛直角|天頂角|高度角|方向角|方位角|交角/.test(label)
+      || ((!label || label === input.target) && /^(?:既知点の)?(?:水平角|鉛直角|方向角|方位角|交角|角度)/.test(runHint()));
+    if (!isAngle) return null;
+    const key = JSON.stringify([input.prog, input.label, input.target]);
+    const unit = input.angle || S.angle;
+    const scale = unit === 'Rad' ? 180 / Math.PI : unit === 'Gra' ? 0.9 : 1;
+    const saved = S.dmsInputs?.[key];
+    const previous = Number.isFinite(saved) ? saved : input.keep && Number.isFinite(input.current) ? input.current * scale : 0;
+    return { key, scale, previous, part: 0, parts: null, negative: false };
+  }
+  function dmsParts(dms) {
+    if (dms.parts) {
+      return dms.parts.map((value, i) => {
+        const [whole, fraction] = value.split('.');
+        return (i === 0 && dms.negative ? '-' : '') + whole.padStart(DMS_WIDTH[i], '0')
+          + (fraction === undefined ? '' : '.' + fraction);
+      });
+    }
+    const { sign, d, m, s } = FxAngle.toDMS(dms.previous, 3);
+    const [seconds, fraction] = String(s).split('.');
+    return [(sign < 0 ? '-' : '') + String(d).padStart(3, '0'), String(m).padStart(2, '0'),
+      seconds.padStart(2, '0') + (fraction ? '.' + fraction : '')];
+  }
+  const dmsDisplay = dms => dmsParts(dms).join('-');
+  function dmsControls(dms) {
+    return dmsParts(dms).map((value, i) => '<button type="button" class="dms-part" tabindex="-1" data-tap="dms' + i
+      + '" aria-label="' + DMS_LABELS[i] + ' ' + esc(value) + '" aria-pressed="' + (i === dms.part) + '">'
+      + esc(value) + '</button>').join('-');
+  }
+  function editDms(dms, id) {
+    if (id === 'LEFT' || id === 'RIGHT' || id === 'DMS') {
+      dms.part = Math.min(2, Math.max(0, dms.part + (id === 'LEFT' ? -1 : 1)));
+    } else if (id === 'DEL') {
+      if (dms.parts) dms.parts[dms.part] = dms.parts[dms.part].slice(0, -1);
+    } else if (id === 'NEG' || id === 'SUB') {
+      if (!dms.parts) dms.parts = ['', '', ''];
+      dms.negative = !dms.negative;
+    } else if (/^\d$/.test(id) || (id === 'DOT' && dms.part === 2)) {
+      if (!dms.parts) dms.parts = ['', '', ''];
+      const i = dms.part, current = dms.parts[i];
+      if (id === 'DOT') {
+        if (!current.includes('.')) dms.parts[i] = (current || '0') + '.';
+      } else if (i === 2 && current.includes('.')) {
+        if (current.split('.')[1].length < 3) dms.parts[i] += id;
+      } else {
+        dms.parts[i] = current.length >= DMS_WIDTH[i] ? id : current + id;
+        if (i < 2 && dms.parts[i].length === DMS_WIDTH[i]) dms.part++;
+      }
+    }
+  }
+  function coordinateField(input) {
+    const label = input.label.normalize('NFKC').toUpperCase().trim().replace(/^-+|-+$/g, '');
+    const named = label.match(/^(?:(B|O|K|P|F|S|T|I|BP|EP|IP|BC|EC|RO|SP|TYUUSIN)[\s_-]?)?([XYZ])(\d*)$/);
+    if (named && (named[1] || named[3] || named[2] !== 'Z')) return { axis: named[2].toLowerCase(), group: (named[1] || '') + ':' + named[3] };
+    const hint = /座標|標高/.test(label) ? label : runHint().normalize('NFKC').toUpperCase();
+    const axis = /^(.*?)(?:座標\s*|の\s*)([XY])(?:$|\W)/.exec(hint);
+    if (axis) return { axis: axis[2].toLowerCase(), group: axis[1].trim() };
+    if (/^(?:標高|計画高)|の標高/.test(hint)) return { axis: 'z', group: '' };
+    return null;
+  }
+  function pointName(field, value) {
+    const x = run.lastCoordX;
+    if (field?.axis !== 'y' || x?.group !== field.group || !Number.isFinite(value)) return '';
+    const points = Array.isArray(S.pickedPoints) ? S.pickedPoints : [];
+    const p = points.find(point => point && Math.abs(point.x - x.value) < 1e-9 && Math.abs(point.y - value) < 1e-9);
+    return typeof p?.name === 'string' ? '（' + p.name + '）' : '';
+  }
+  const runHintHtml = t => t ? '<span class="lhint" title="' + esc(t).replace(/"/g, '&quot;') + '">' + esc(t) + '</span>' : '';
+  const coordinatePicker = () => line('', {
+    html: '<button type="button" class="lcd-pick" data-tap="pickxy">座標一覧から</button>'
+  });
+  function coordinateInputLine() {
+    const text = run.inToks.join('');
+    const value = text ? Number(text) : run.wait.keep ? run.wait.current : NaN;
+    const hint = pointName(run.coordinate, value) || (run.grid.wide ? runHint() : '');
+    const before = run.inToks.slice(0, run.inCur).join('');
+    const at = run.inToks[run.inCur];
+    const after = run.inToks.slice(run.inCur + 1).join('');
+    const input = text || !run.keepText
+      ? esc(before) + '<span class="cur">' + (at === undefined ? '&nbsp;' : esc(at)) + '</span>' + esc(after)
+      : esc(run.keepText);
+    return line('', { html: esc(run.inPrefix) + input + runHintHtml(hint) });
+  }
+  // 選択した点は、同じ組の X・Y・標高にだけ順に入れる。
+  function fillRunInputs(vals, point, axes, token, first) {
+    if (run !== token || run.wait !== first) return;
+    const p = { name: point.name, x: Number(FxPickXY.text(point.x)), y: Number(FxPickXY.text(point.y)) };
+    if (p.name && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+      const prev = Array.isArray(S.pickedPoints) ? S.pickedPoints : [];
+      S.pickedPoints = [p, ...prev.filter(other => other && (other.x !== p.x || other.y !== p.y))].slice(0, 100);
+      save();
+    }
+    let index = 0;
+    const group = token.coordinate.group;
     let tries = 0;
     const step = () => {
-      if (!run || run.done || !vals.length) { render(); return; }
+      if (run !== token || run.done || index >= vals.length) { render(); return; }
       const w = run.wait;
       if (!w) {   // 計算の途中（tick）：少し待って続ける
         if (tries++ < 100) { setTimeout(step, 20); return; }
         render(); return;
       }
-      if (w.type !== 'input') { toast('途中で止まったので、残りの ' + vals.length + ' つは入れていません'); render(); return; }
+      const field = run.coordinate;
+      if (w.type !== 'input' || field?.axis !== axes[index] || (field.group !== group && axes[index] !== 'z')) {
+        toast('次の入力に使わない座標は入りませんでした'); render(); return;
+      }
       tries = 0;
-      run.inToks = Array.from(vals.shift()); run.inCur = run.inToks.length;
+      run.inToks = Array.from(vals[index]); run.inCur = run.inToks.length;
       runKey({ id: 'EXE' });
       render();
-      step();
+      if (run.wait !== w) { index++; step(); }
     };
     step();
   }
   function pickFromList() {
-    if (!(mode === 'run' && run && !run.done && run.wait && run.wait.type === 'input')) return;
+    if (!(mode === 'run' && run && !run.done && run.wait?.type === 'input' && run.coordinate)) return;
     if (!window.FxPickXY) { toast('座標一覧の部品を読めませんでした'); return; }
-    FxPickXY.open({ hint: runHint() || run.wait.label, toast, onPick: vals => fillRunInputs(vals) });
+    const token = run, first = run.wait;
+    FxPickXY.open({ axis: run.coordinate.axis, hint: runHint() || first.label, toast,
+      onPick: (vals, point, axes) => fillRunInputs(vals, point, axes, token, first) });
   }
   function renderRun() {
     setHint(runHint());
     if (run.grid.wide) return renderRunWide();
-    const g = run.grid, lines = g.rows.map(r => line(r.join('')));
-    if (run.wait && run.wait.type === 'input' && (run.inToks.length || !run.wait.keep)) {
+    const g = run.grid, lines = g.rows.map((r, i) => g.hints[i]
+      ? line('', { html: esc(r.join('').trimEnd()) + runHintHtml(g.hints[i]) }) : line(r.join('')));
+    if (!run.done && run.wait?.type === 'input' && run.coordinate) {
+      lines[run.inRow] = coordinateInputLine();
+      lines.splice(run.inRow + 1, 0, coordinatePicker());
+      if (run.inRow + 1 >= LCD_ROWS) lines.shift();
+      paint(lines);
+      return;
+    }
+    if (run.wait && run.wait.type === 'input' && run.dms) {
+      lines[run.inRow] = line('', { html: dmsControls(run.dms) });
+    } else if (run.wait && run.wait.type === 'input' && (run.inToks.length || !run.wait.keep)) {
       const t = run.inToks.join(''), cur = run.inToks.slice(0, run.inCur).join('').length;
       lines[run.inRow] = wrapWithCursor(t, cur, 1)[0];
     }
-    if (run.done && !run.prog.name.startsWith('(')) lines.forEach(l => { l.html = undefined; });
     paint(lines);
   }
   // 見やすい表示の実行画面：下から LCD_ROWS 行。聞かれている行は「KX? 100.123▮　既知点の X」
   function renderRunWide() {
     const g = run.grid, w = run.wait, asking = !run.done && w && w.type === 'input';
-    const hintHtml = t => t ? '<span class="lhint" title="' + esc(t).replace(/"/g, '&quot;') + '">' + esc(t) + '</span>' : '';
+    const pick = asking && run.coordinate;
     let used = Math.max(g.row, g.maxRow);
     // 止まっている・終わったときは、いちばん下にどうすればよいかを出す
     const status = run.done ? (run.stopped ? '' : '― 終わり　EXE：もう一度　EXIT：一覧 ―') : (w && w.type === 'pause' ? '◢ EXE で続き' : '');
-    const total = used + (status ? 1 : 0);
+    const total = used + (status || pick ? 1 : 0);
     const start = Math.max(0, total - LCD_ROWS);
     const lines = [];
     for (let i = start; i < used; i++) {
       const text = (g.rows[i] || []).join('');
       if (asking && i === run.inRow) {
+        if (pick) { lines.push(coordinateInputLine()); continue; }
         const before = run.inToks.slice(0, run.inCur).join(''), at = run.inToks[run.inCur], after = run.inToks.slice(run.inCur + 1).join('');
         let body;
-        if (!run.inToks.length && run.keepText) body = '<span class="cur">' + esc(Array.from(run.keepText)[0] || ' ') + '</span>' + esc(Array.from(run.keepText).slice(1).join(''));
+        if (run.dms) body = dmsControls(run.dms);
+        else if (!run.inToks.length && run.keepText) body = '<span class="cur">' + esc(Array.from(run.keepText)[0] || ' ') + '</span>' + esc(Array.from(run.keepText).slice(1).join(''));
         else body = esc(before) + '<span class="cur">' + (at === undefined ? '&nbsp;' : esc(at)) + '</span>' + esc(after);
-        lines.push(line('', { html: esc(run.inPrefix) + body + hintHtml(g.hints[i]) }));
+        lines.push(line('', { html: esc(run.inPrefix) + body + runHintHtml(g.hints[i]) }));
       } else if (g.right[i]) lines.push(line(text, { right: true }));
-      else lines.push(line('', { html: esc(text.replace(/\s+$/, '')) + hintHtml(g.hints[i]) }));
+      else lines.push(line('', { html: esc(text.replace(/\s+$/, '')) + runHintHtml(g.hints[i]) }));
     }
     if (status) lines.push(line(status, { small: true }));
+    if (pick) lines.push(coordinatePicker());
     if (LCD_ROWS > 4 && lines.length < LCD_ROWS && !run.prog.name.startsWith('(')) {
       const title = B.meta(run.prog.source).title;
       lines.unshift(line(title ? title + '　' + run.prog.name : run.prog.name, { small: true }));
@@ -1283,20 +1401,38 @@
     if (!w) { lastKeyCode = k.code || 0; return; } // 実行中：Getkey 用に記録するだけ
     if (w.type === 'pause') { if (id === 'EXE') { run.wait = null; pump(); } return; }
     // 入力待ち
+    const dms = run.dms;
+    if (dms && id !== 'EXE' && id !== 'EXIT') { editDms(dms, id); return; }
     if (id === 'EXE') {
-      const text = run.inToks.join('');
+      let text = run.inToks.join(''), shown = text || run.keepText || '';
+      if (dms) {
+        const invalid = dms.parts?.findIndex((value, i) => i > 0 && Number(value) >= 60);
+        if (invalid > 0) { dms.part = invalid; toast(DMS_LABELS[invalid] + 'は 00〜59 の範囲で入力してください'); return; }
+        const degrees = dms.parts ? FxAngle.parse(dmsDisplay(dms).replace(/\.$/, '')) : dms.previous;
+        text = (degrees / dms.scale).toFixed(14);
+        shown = dmsDisplay(dms).replace(/\.$/, '');
+        if (!S.dmsInputs || typeof S.dmsInputs !== 'object' || Array.isArray(S.dmsInputs)) S.dmsInputs = {};
+        S.dmsInputs[dms.key] = degrees;
+        run.dms = null;
+        save();
+      }
       if (!text && !w.keep) return;
       try { if (text) E.evaluate(text, ctxComp()); } catch (e) { toast(e.message); return; }
+      const field = run.coordinate;
+      const value = text ? Number(text) : w.current;
+      const name = pointName(field, value);
+      if (name) run.grid.hints[run.inRow] = name;
+      run.lastCoordX = field?.axis === 'x' && Number.isFinite(value) ? { group: field.group, value } : null;
       run.wait = null;
-      if (run.grid.wide) {
+      if (run.grid.wide || field) {
         // 聞かれた行を「KX? 100.123」にして残す（変数の名前もそのまま）
-        const g = run.grid, shown = text || run.keepText || '';
+        const g = run.grid;
         g.rows[run.inRow] = Array.from(run.inPrefix + shown);
         pump(text);
         return;
       }
       run.grid.row = Math.min(run.inRow + 1, 4);
-      if (text) { run.grid.rows[run.inRow] = Array(16).fill(' '); const ch = Array.from(text).slice(-16); ch.forEach((c, j) => { run.grid.rows[run.inRow][j] = c; }); }
+      if (text) { run.grid.rows[run.inRow] = Array(16).fill(' '); const ch = Array.from(shown).slice(-16); ch.forEach((c, j) => { run.grid.rows[run.inRow][j] = c; }); }
       pump(text);
       return;
     }
@@ -1465,6 +1601,7 @@
         // .ccl（電卓から吸い出したファイル）・.cce（CcEditor）は中身を変換して読む
         const dec = await FxImport.decodeFile(f);
         if (dec) {
+          if (window.FxProgInfo && !dec.unknown) dec.source = FxProgInfo.tidy(dec.name, dec.source);
           got.push({ name: dec.name, mode: dec.mode, source: dec.source, tail: dec.tail || 0, time: f.lastModified, ccl: /\.ccl$/i.test(f.name) });
           if (dec.unknown) bad.push(dec.name + '（読めない記号 ' + dec.unknown + '）');
           continue;
@@ -1578,8 +1715,9 @@
       fs = Math.max(8, Math.min(fs, available / (4 * rowHeight + indicatorHeight)));
     } else {
       const bezel = lcd.parentElement;
-      const fixed = padding(calc) + 4 * parseFloat(getComputedStyle(calc).rowGap) + padding(bezel) + padding(lcd)
-        + calc.querySelector('.top').offsetHeight + calc.querySelector('.bar').offsetHeight;
+      const barHeight = calc.querySelector('.bar').offsetHeight;
+      const fixed = padding(calc) + (barHeight ? 4 : 3) * parseFloat(getComputedStyle(calc).rowGap) + padding(bezel) + padding(lcd)
+        + calc.querySelector('.top').offsetHeight + barHeight;
       // 4 段ずつの関数キーとテンキーが押せる高さを残す。
       const keypadHeight = 300;
       const base = fs * (4 * rowHeight + indicatorHeight);
@@ -1654,6 +1792,8 @@
     else if (mode === 'calc' || mode === 'solve') { const st = mode === 'calc' ? calc : solve; if (substCommit(st, mode)) st.idx = Number(t); }
     else if (mode === 'confirm') { confirmKey({ id: t === 'yes' ? 'EXE' : 'EXIT' }); }
     else if (mode === 'name') nameTap(t);
+    else if (mode === 'run' && t === 'pickxy') pickFromList();
+    else if (mode === 'run' && run?.dms && /^dms[0-2]$/.test(t)) run.dms.part = Number(t[3]);
     render();
   }
 
@@ -1678,7 +1818,7 @@
     $('cands').addEventListener('pointerdown', e => e.preventDefault()); // 編集欄のカーソルを保つ
     $('cands').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) acceptCand(Number(b.dataset.c)); });
     $('fileIn').addEventListener('change', e => onFiles([...e.target.files]));
-    $('xyBtn').addEventListener('click', pickFromList);
+    $('xyBtn')?.remove();
     $('kbdBtn').addEventListener('click', () => {
       if (mode === 'edit') {
         const ta = $('editor'), on = ta.inputMode !== 'text';
@@ -1695,14 +1835,12 @@
     });
     $('kbd').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('kbd').blur(); press('EXE'); } else if (e.key === 'Backspace') { e.preventDefault(); press('DEL'); } });
     $('ver').textContent = 'v' + VERSION;
+    $('lcd').after($('ver'));
     // 「実機用プログラム」の説明の .txt ごと取り込まれたプログラム（先頭が「■ NINI：…」）は、開いたときに本文だけに直す
     if (window.FxProgInfo) {
-      const fixed = [];
-      for (const p of S.programs) {
-        if (FxProgInfo.fromGuide(p.source) === null) continue;
-        p.source = FxProgInfo.tidy(p.name, p.source); fixed.push(p.name);
-      }
-      if (fixed.length) { save(); setTimeout(() => toast(fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました', 8000), 300); }
+      const result = FxProgInfo.addToKnown(S.programs);
+      if (result.done.length || result.fixed.length) save();
+      if (result.fixed.length) setTimeout(() => toast(result.fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました', 8000), 300);
     }
     physicalKeys();
     // 古い画面に新しいスクリプトが読み込まれても、配置の初期化より先につまみを用意する。
@@ -1728,7 +1866,7 @@
     resultBtn.textContent = '結果'; resultBtn.hidden = true;
     resultBtn.setAttribute('aria-label', '計算結果をコピー・共有');
     resultBtn.addEventListener('click', openResult);
-    $('ver').before(resultBtn);
+    document.querySelector('.blk-lcd .bar').prepend(resultBtn);
     bindTabs();
     fitLcd();
     window.addEventListener('resize', fitLcd);

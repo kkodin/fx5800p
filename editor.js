@@ -348,7 +348,7 @@
         const item = dec ? Object.assign({ name: dec.name, mode: dec.mode, source: dec.source }, dec.tail ? { tail: dec.tail } : {})
           : { name: f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim(), mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, '') };
         // 「実機用プログラム」フォルダの読み物は飛ばし、説明の .txt は本文だけにする（元と同じなら日本語の名前などを付ける）
-        if (!dec && window.FxProgInfo) {
+        if (window.FxProgInfo && !dec?.unknown) {
           if (FxProgInfo.isReadme(item.name, item.source)) { bad.push(f.name + ' はプログラムではないので読みませんでした'); continue; }
           item.source = FxProgInfo.tidy(item.name, item.source);
         }
@@ -449,6 +449,10 @@
 
   function init() {
     load();
+    if (window.FxProgInfo) {
+      const result = FxProgInfo.addToKnown(programs);
+      if (result.done.length || result.fixed.length) writePrograms();
+    }
     renderPalette('cmd');
     document.querySelectorAll('[data-pal]').forEach(b => { b.onclick = () => renderPalette(b.dataset.pal); });
     const t = $('src');

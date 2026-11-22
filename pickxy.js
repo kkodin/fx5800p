@@ -1,5 +1,5 @@
 // 電卓でプログラムが値を聞いているときに、現場の座標一覧（IndexedDB fx5800p-genba）から点を選んで入れる
-//   FxPickXY.open({ hint, onPick(values) })
+//   FxPickXY.open({ axis, hint, onPick(values, point) })
 //     values：入れる値の文字の並び（X→Y なら [x, y]）。続けて聞かれる入力に順に入れる
 //   FxPickXY.text(v)：入れる値の文字（小数 4 桁まで、余分な 0 は消す）
 //   座標一覧は読むだけ。現場の選択は genba と同じ meta の lastSite を使い、選び直したら覚える
@@ -47,12 +47,14 @@
     let siteId = null;
     try { siteId = await S.getMeta('lastSite', null); } catch (e) { /* 初めの現場を使う */ }
     if (!sites.some(s => s.id === siteId)) siteId = sites[0].id;
-    let points = [], q = '', mode = guessMode(opt.hint, readMode());
+    const allModes = [['xy', 'X→Y'], ['x', 'X だけ'], ['y', 'Y だけ'], ['z', '標高'], ['xyz', 'X→Y→標高']];
+    const allowed = opt.axis === 'x' ? ['xy', 'x', 'xyz'] : opt.axis ? [opt.axis] : allModes.map(([v]) => v);
+    const modes = allModes.filter(([v]) => allowed.includes(v));
+    let points = [], q = '', mode = opt.axis === 'x' ? 'xy' : opt.axis || guessMode(opt.hint, readMode());
 
     const sel = h('select', { 'aria-label': '現場' }, sites.map(s => h('option', { value: s.id, text: s.name })));
     sel.value = siteId;
     const search = h('input', { type: 'search', placeholder: '点名で探す（数字だけでも可）', autocomplete: 'off', enterkeyhint: 'search' });
-    const modes = [['xy', 'X→Y'], ['x', 'X だけ'], ['y', 'Y だけ'], ['z', '標高'], ['xyz', 'X→Y→標高']];
     const seg = h('div', { class: 'px-seg', role: 'group', 'aria-label': '入れる値' }, modes.map(([v, t]) => h('button', { type: 'button', 'data-m': v, class: v === mode ? 'on' : '', text: t })));
     const note = h('p', { class: 'px-note' });
     const ul = h('ul', { class: 'px-list' });
@@ -78,7 +80,7 @@
           h('b', { text: p.name }), h('span', { class: 'px-xy', text: 'X ' + f3(p.x) + '　Y ' + f3(p.y) + (p.z == null ? '' : '　Z ' + f3(p.z)) }),
           p.kind && p.kind !== 'その他' ? h('small', { text: p.kind }) : ''
         ]);
-        b.addEventListener('click', () => { if (!v) return; saveMode(mode); dlg.close(); opt.onPick(v, p); });
+        b.addEventListener('click', () => { if (!v) return; saveMode(mode); dlg.close(); opt.onPick(v, p, mode); });
         ul.append(h('li', {}, [b]));
       }
       if (shown.length > 300) ul.append(h('li', { class: 'px-empty', text: 'ほかに ' + (shown.length - 300) + ' 点。点名で絞り込んでください。' }));
@@ -96,7 +98,7 @@
     drawNote();
     const dlg = Dl.open({
       title: '座標一覧から入れる', width: 520,
-      body: h('div', { class: 'px-form' }, [h('div', { class: 'px-row' }, [h('label', { text: '現場' }), sel]), search, seg, note, ul]),
+      body: h('div', { class: 'px-form' }, [h('div', { class: 'px-row' }, [h('label', { text: '現場' }), sel]), search, modes.length > 1 ? seg : null, note, ul]),
       buttons: [{ label: 'やめる' }]
     });
     await load();
