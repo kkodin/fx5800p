@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.6';
+  const VERSION = '1.4.7';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -157,6 +157,8 @@
     // タブの画面の「変数」「履歴」は、計算のたびに描き直す
     queueMicrotask(() => { if (tab === 'var' || tab === 'hist') renderTabs(); });
     if (mode !== 'run') setHint('');
+    // 値を聞かれている間だけ「座標一覧から」を出す
+    $('xyBtn').hidden = !(mode === 'run' && run && !run.done && run.wait && run.wait.type === 'input');
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
     document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
@@ -1090,6 +1092,31 @@
     return B.meta(p.source).vars[w.target] || '';
   }
   function setHint(text) { hintName = text || ''; }
+  // 座標一覧から選んだ値を、いま聞かれている入力から順に入れて EXE する（X→Y なら 2 つ続けて）
+  function fillRunInputs(vals) {
+    vals = vals.slice();
+    let tries = 0;
+    const step = () => {
+      if (!run || run.done || !vals.length) { render(); return; }
+      const w = run.wait;
+      if (!w) {   // 計算の途中（tick）：少し待って続ける
+        if (tries++ < 100) { setTimeout(step, 20); return; }
+        render(); return;
+      }
+      if (w.type !== 'input') { toast('途中で止まったので、残りの ' + vals.length + ' つは入れていません'); render(); return; }
+      tries = 0;
+      run.inToks = Array.from(vals.shift()); run.inCur = run.inToks.length;
+      runKey({ id: 'EXE' });
+      render();
+      step();
+    };
+    step();
+  }
+  function pickFromList() {
+    if (!(mode === 'run' && run && !run.done && run.wait && run.wait.type === 'input')) return;
+    if (!window.FxPickXY) { toast('座標一覧の部品を読めませんでした'); return; }
+    FxPickXY.open({ hint: runHint() || run.wait.label, toast, onPick: vals => fillRunInputs(vals) });
+  }
   function renderRun() {
     setHint(runHint());
     const g = run.grid, lines = g.rows.map(r => line(r.join('')));
@@ -1403,7 +1430,7 @@
     document.addEventListener('keyup', e => {
       if (e.key !== 'Shift' || !shiftAlone) return;
       shiftAlone = false;
-      if (e.ctrlKey || e.altKey || e.metaKey || mode === 'name') return;
+      if (e.ctrlKey || e.altKey || e.metaKey || mode === 'name' || document.documentElement.classList.contains('dlg-open')) return;
       press('SHIFT');
     });
     window.addEventListener('blur', () => { shiftAlone = false; });
@@ -1411,6 +1438,8 @@
     document.addEventListener('keydown', e => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Shift') return;
+      // ダイアログ（配置・座標一覧から など）を開いている間は、電卓のキーにしない
+      if (document.documentElement.classList.contains('dlg-open')) return;
       // 候補が出ているとき：Tab で決定、↑↓ で選ぶ、Esc で閉じる
       if (cand.list.length && cand.kind === mode) {
         if (e.key === 'Tab') { e.preventDefault(); acceptCand(); return; }
@@ -1470,6 +1499,7 @@
     $('cands').addEventListener('pointerdown', e => e.preventDefault()); // 編集欄のカーソルを保つ
     $('cands').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) acceptCand(Number(b.dataset.c)); });
     $('fileIn').addEventListener('change', e => onFiles([...e.target.files]));
+    $('xyBtn').addEventListener('click', pickFromList);
     $('kbdBtn').addEventListener('click', () => {
       if (mode === 'edit') {
         const ta = $('editor'), on = ta.inputMode !== 'text';

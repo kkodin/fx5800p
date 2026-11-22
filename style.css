@@ -250,6 +250,25 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .cd { flex: 0 0 auto; background: #3a3f48; color: #f1f3f6; border: 1px solid #5a606b; border-radius: 12px; padding: 2px 10px; font: 600 13px "Consolas", "Menlo", monospace; }
 .cd.sel { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; }
 .bar .ver[hidden] { display: none; }
+.bar .mini.xy { background: #2f6f4f; border-color: #3f8f66; color: #fff; font-weight: 700; }
+.bar .mini[hidden] { display: none; }
+/* 座標一覧から入れる（pickxy.js） */
+.px-form { display: flex; flex-direction: column; gap: 8px; }
+.px-row { display: flex; align-items: center; gap: 8px; }
+.px-row select { flex: 1; min-width: 0; }
+.px-form select, .px-form input { font-size: 16px; padding: 6px 8px; border-radius: 8px; border: 1px solid #4a4e55; background: #15161a; color: #eee; }
+.px-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.px-seg button { flex: 1 1 auto; padding: 6px 8px; border-radius: 8px; border: 1px solid #4a4e55; background: #2b2e34; color: #ddd; font-size: 13px; }
+.px-seg button.on { background: #e0a12a; border-color: #e0a12a; color: #1b1b1b; font-weight: 700; }
+.px-note { margin: 0; font-size: 12px; color: #aab; line-height: 1.5; }
+.px-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid #3a3d43; }
+.px-list li { border-bottom: 1px solid #33363c; }
+.px-pt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; width: 100%; text-align: left; padding: 10px 6px; background: none; border: 0; color: #eee; font-size: 15px; }
+.px-pt:hover, .px-pt:focus-visible { background: #2b2e34; }
+.px-pt[disabled] { opacity: .4; }
+.px-pt .px-xy { font-variant-numeric: tabular-nums; color: #cfd3d8; font-size: 13px; }
+.px-pt small { color: #9aa; }
+.px-empty { padding: 12px 6px; color: #9aa; font-size: 13px; }
 
 /* SHIFT・ALPHA が有効な間のキーの表記 */
 .key.face-s .main { color: #ffc94d !important; }

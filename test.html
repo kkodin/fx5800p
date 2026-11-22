@@ -26,6 +26,7 @@
 <script src="engine.js"></script>
 <script src="basic.js"></script>
 <script src="senkei.js"></script>
+<script src="pickxy.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -421,6 +422,10 @@
     const r = FxProgInfo.addToKnown(progs);
     return r.fixed.join(',') + '|' + r.done.join(',');
   });
+  // 座標一覧から入れる（pickxy.js）
+  test('入れる値の文字（余分な 0 を消す・負の数）', '100.123|-50.5|0|12', () => [FxPickXY.text(100.12300), FxPickXY.text(-50.5), FxPickXY.text(-0.00001), FxPickXY.text(12)].join('|'));
+  test('X→Y・Y だけ・標高のない点の標高', '1.5,2|2|null', () => { const p = { x: 1.5, y: 2, z: null }; return FxPickXY.values(p, 'xy').join(',') + '|' + FxPickXY.values(p, 'y').join(',') + '|' + FxPickXY.values(p, 'z'); });
+  test('聞かれている名前から入れ方を決める', 'y|z|xy|x', () => [FxPickXY.guessMode('既知点の Y', 'xy'), FxPickXY.guessMode('器械点の標高', 'xy'), FxPickXY.guessMode('既知点の X', 'y'), FxPickXY.guessMode('', 'x')].join('|'));
   test('付けたあとも動きは同じ（KAIHOU の 10 m・45°）', '7.071|7.071', () => {
     const progs = [{ name: 'KAIHOU', source: FxProgInfo.attach('KAIHOU', FxProgInfo.KNOWN.KAIHOU) }, { name: 'SUB1', source: FxProgInfo.attach('SUB1', FxProgInfo.KNOWN.SUB1) }, { name: 'SUB2', source: FxProgInfo.attach('SUB2', FxProgInfo.KNOWN.SUB2) }];
     const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
