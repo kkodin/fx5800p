@@ -166,8 +166,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .calc.free .blk-upper .fkeys { flex: 1 1 0; }
 .calc.free .blk-nkeys .nkeys { flex: 1 1 0; }
 /* ボタンの文字：ブロックの大きさに合わせる（大きければよいわけではないので、上限も付ける） */
-.calc.free .blk-upper { --k-fn: clamp(9px, min(2.7cqw, 4.2cqh), 26px); --k-small: clamp(8px, min(2.4cqw, 3.8cqh), 22px); --k-sub: clamp(7px, min(1.7cqw, 2.6cqh), 15px); }
-.calc.free .blk-nkeys { --k-num: clamp(12px, min(5.2cqw, 9cqh), 44px); --k-big: clamp(11px, min(4cqw, 7cqh), 34px); --k-sub: clamp(7px, min(2cqw, 3.4cqh), 15px); }
+.calc.free .blk-upper { --k-fn: clamp(9px, min(2.7cqw, 4.2cqh), 26px); --k-small: clamp(8px, min(2.4cqw, 3.8cqh), 22px); --k-sub: clamp(7px, min(1.7cqw, 2.6cqh), 15px); --k-alt: clamp(9px, min(3.3cqw, 5cqh), 14px); }
+.calc.free .blk-nkeys { --k-num: clamp(12px, min(5.2cqw, 9cqh), 44px); --k-big: clamp(11px, min(4cqw, 7cqh), 34px); --k-sub: clamp(7px, min(2cqw, 3.4cqh), 15px); --k-alt: clamp(9px, min(4.15cqw, 7.2cqh), 19px); }
 .calc.free .rkey { width: clamp(30px, min(11cqw, 17cqh), 80px); }
 .calc.free .pad { height: clamp(42px, calc(18cqh * var(--pad-scale, 1)), 112px); }
 .calc.free .round .lab, .calc.free .pad .replay { font-size: calc(10px * var(--fs, 1)); }
@@ -298,5 +298,5 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .key.face-s .sub .sl, .key.face-a .sub .al { visibility: hidden; }
 .calc.shift-on .k-shift .main { box-shadow: 0 0 0 2px #fff6, 0 3px 0 #050506; filter: brightness(1.15); }
 .calc.alpha-on .k-alpha .main { box-shadow: 0 0 0 2px #fff6, 0 3px 0 #050506; filter: brightness(1.15); }
-.nkeys .key.face-s .main, .nkeys .key.face-a .main { font-size: clamp(13px, 4.2vw, 19px); }
-.fkeys .key.face-s .main, .fkeys .key.face-a .main { font-size: clamp(10px, 3vw, 14px); }
+.nkeys .key.face-s .main, .nkeys .key.face-a .main { font-size: var(--k-alt, clamp(13px, 4.2vw, 19px)); }
+.fkeys .key.face-s .main, .fkeys .key.face-a .main { font-size: var(--k-alt, clamp(10px, 3vw, 14px)); }

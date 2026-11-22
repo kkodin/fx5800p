@@ -9,6 +9,8 @@
   const CURSOR_SCALE = [0.85, 1, 1.25];
   const APPEARANCE = ['font', 'lcd', 'lcdFont', 'cursorSide', 'cursorSize'];
   const BLOCKS = ['lcd', 'upper', 'nkeys', 'tabs'];
+  const KEY_MIN = { upper: { w: 300, h: 204 }, nkeys: { w: 252, h: 144 } };
+  const SNAP_PX = 10;
   const NAMES = { lcd: 'ディスプレイ', upper: '上のボタン', nkeys: 'テンキー', tabs: 'タブの画面' };
   const DEF = {
     // 縦：標準の並び（今までの見た目）。自由配置に切り替えたときの初めの置き方も持つ
@@ -70,6 +72,35 @@
     return renamed;
   }
 
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const halfPercent = value => Math.round(value * 2) / 2;
+  function minSize(block) {
+    const keys = KEY_MIN[block];
+    return keys ? { w: Math.min(100, keys.w / info.W * 100), h: Math.min(100, keys.h / info.H * 100) } : { w: 12, h: 8 };
+  }
+  function displayedBlock(block, saved) {
+    if (!KEY_MIN[block]) return saved;
+    const min = minSize(block);
+    const w = clamp(saved.w, min.w, 100), h = clamp(saved.h, min.h, 100);
+    return { ...saved, w, h, x: clamp(saved.x, 0, 100 - w), y: clamp(saved.y, 0, 100 - h) };
+  }
+  function snapSize(rect, neighbors, min, axis) {
+    const horizontal = axis === 'w';
+    const origin = horizontal ? 'x' : 'y', across = horizontal ? 'y' : 'x', span = horizontal ? 'h' : 'w';
+    const scale = horizontal ? info.W : info.H;
+    const edge = rect[origin] + rect[axis];
+    let distance = SNAP_PX, size = rect[axis];
+    for (const other of neighbors) {
+      if (rect[across] >= other[across] + other[span] || other[across] >= rect[across] + rect[span]) continue;
+      const gap = Math.abs(edge - other[origin]) * scale / 100;
+      const candidate = other[origin] - rect[origin];
+      if (gap > distance || candidate < min[axis]) continue;
+      distance = gap;
+      size = candidate;
+    }
+    return size;
+  }
+
   // ---- 画面に当てはめる ----
   function apply() {
     const calc = opt.calc, vw = window.innerWidth, vh = window.innerHeight;
@@ -93,11 +124,11 @@
     } else { calc.style.width = calc.style.height = calc.style.transform = ''; }
     // メニューを開いている間（自由配置）は、ディスプレイを「上のボタン」の場所まで広げる（テンキーは残す）
     const menuBig = free && menuOpen && !editing;
-    const u = L.blocks.upper, l0 = L.blocks.lcd;
+    const u = displayedBlock('upper', L.blocks.upper), l0 = L.blocks.lcd;
     const big = menuBig ? { x: Math.min(l0.x, u.x), y: Math.min(l0.y, u.y), w: Math.max(l0.x + l0.w, u.x + u.w) - Math.min(l0.x, u.x), h: Math.max(l0.y + l0.h, u.y + u.h) - Math.min(l0.y, u.y) } : null;
     for (const b of BLOCKS) {
       const el = calc.querySelector('[data-blk="' + b + '"]');
-      let p = L.blocks[b];
+      let p = displayedBlock(b, L.blocks[b]);
       if (!el) continue;
       if (free) {
         el.hidden = (b === 'tabs' && !p.show) || (menuBig && b === 'upper');
@@ -205,24 +236,33 @@
   function dragOn(el, b, kind) {
     let d = null;
     el.addEventListener('pointerdown', e => {
-      if (kind === 'move' && e.target.classList.contains('lo-rs')) return;
+      if (e.button !== 0 || (kind === 'move' && e.target.classList.contains('lo-rs'))) return;
       e.preventDefault(); e.stopPropagation();
       try { el.setPointerCapture(e.pointerId); } catch { /* 捕まえられなくても動かせる */ }
-      d = { id: e.pointerId, x: e.clientX, y: e.clientY, p: Object.assign({}, st[info.orient].blocks[b]) };
+      const blocks = st[info.orient].blocks;
+      d = { id: e.pointerId, x: e.clientX, y: e.clientY, orient: info.orient, W: info.W, H: info.H,
+        p: { ...displayedBlock(b, blocks[b]) } };
       const blk = opt.calc.querySelector('[data-blk="' + b + '"]'); opt.calc.querySelectorAll('.blk').forEach(x => { x.style.zIndex = ''; }); blk.style.zIndex = 5;
     });
     el.addEventListener('pointermove', e => {
-      if (!d || e.pointerId !== d.id) return;
+      if (!d || e.pointerId !== d.id || d.orient !== info.orient || d.W !== info.W || d.H !== info.H) return;
       const m = toLocal(e.clientX - d.x, e.clientY - d.y);
-      const px = m.dx / info.W * 100, py = m.dy / info.H * 100, p = st[info.orient].blocks[b];
-      const snap = v => Math.round(v * 2) / 2;   // 0.5% ずつ
+      const px = m.dx / info.W * 100, py = m.dy / info.H * 100, blocks = st[info.orient].blocks;
+      const rect = { ...d.p };
       if (kind === 'move') {
-        p.x = snap(Math.min(Math.max(d.p.x + px, 0), 100 - p.w));
-        p.y = snap(Math.min(Math.max(d.p.y + py, 0), 100 - p.h));
+        rect.x = clamp(halfPercent(rect.x + px), 0, 100 - rect.w);
+        rect.y = clamp(halfPercent(rect.y + py), 0, 100 - rect.h);
       } else {
-        p.w = snap(Math.min(Math.max(d.p.w + px, 12), 100 - p.x));
-        p.h = snap(Math.min(Math.max(d.p.h + py, 8), 100 - p.y));
+        const min = minSize(b);
+        rect.w = clamp(halfPercent(rect.w + px), min.w, 100 - rect.x);
+        rect.h = clamp(halfPercent(rect.h + py), min.h, 100 - rect.y);
+        const neighbors = BLOCKS.filter(id => id !== b && (id !== 'tabs' || blocks.tabs.show))
+          .map(id => displayedBlock(id, blocks[id]));
+        const w = snapSize(rect, neighbors, min, 'w');
+        rect.h = snapSize(rect, neighbors, min, 'h');
+        rect.w = w;
       }
+      Object.assign(blocks[b], rect);
       apply();
     });
     const up = e => { if (d && e.pointerId === d.id) d = null; };
@@ -298,6 +338,7 @@
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
           seg([['standard', '標準の並び'], ['free', '自由配置']], () => st[info.orient].mode, v => { st[info.orient].mode = v; }),
           h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),
+          h('p', { class: 'lo-note', text: '自由配置のサイズ変更では、近くの窓の縁に吸い付きます。キーの窓は文字が重ならない大きさまで縮められます。' }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
         h('div', {}, [h('h4', { text: 'カーソルキーの位置' }),
           seg([['left', '左'], ['right', '右']], () => st.cursorSide, v => { st.cursorSide = v; }),
