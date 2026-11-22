@@ -36,7 +36,13 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 @media (min-width: 520px) { .calc { border-radius: 26px; margin-top: 12px; height: calc(100dvh - 24px); box-shadow: 0 10px 40px #000a; } }
 
 /* 液晶 */
-.bezel { background: linear-gradient(#cfd2d5, var(--bezel)); border-radius: 10px; padding: 9px 10px; flex: 0 0 auto; box-shadow: inset 0 1px 0 #fff8, 0 2px 0 #0008; }
+.bezel { position: relative; background: linear-gradient(#cfd2d5, var(--bezel)); border-radius: 10px; padding: 9px 10px; flex: 0 0 auto; box-shadow: inset 0 1px 0 #fff8, 0 2px 0 #0008; }
+.lcd-resize { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); z-index: 1; width: 40%; height: 24px; display: grid; place-items: center; cursor: ns-resize; touch-action: none; }
+.lcd-resize::after { content: ''; width: 38px; height: 4px; border-radius: 4px; background: #50565c; }
+.lcd-resize:focus-visible { outline: 2px solid var(--exe); outline-offset: -2px; border-radius: 6px; }
+.calc.rotated .lcd-resize { cursor: ew-resize; }
+.calc.free .lcd-resize, .calc.menu-open .lcd-resize, .bezel:has(.lcd.editing) .lcd-resize { display: none; }
+.calc:not(.free):not(.menu-open) .screen { height: calc(var(--lcd-fs) * 1.22 * 4 + var(--lcd-extra, 0px)); }
 .lcd {
   position: relative; background: linear-gradient(170deg, var(--lcd), var(--lcd2)); color: var(--ink);
   border-radius: 4px; box-shadow: inset 0 2px 6px #0004; padding: 2px 8px 6px; overflow: hidden;
@@ -55,7 +61,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .ln.small { font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: .78em; line-height: 1.56; text-overflow: ellipsis; }
 .ln.tap { cursor: pointer; }
 /* 見やすい表示：行の右に小さく出す変数の名前 */
-.ln .lhint { float: right; margin-left: .6em; font: 600 .6em/2.03 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; opacity: .72; }
+.ln .lhint { float: right; margin-left: .6em; max-width: 72%; overflow: hidden; text-overflow: ellipsis; font: 600 .6em/2.03 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; opacity: .8; }
 .cur { background: var(--ink); color: var(--lcd); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { background: transparent; color: inherit; } }
 .probe { position: absolute; visibility: hidden; white-space: pre; font-size: 20px; }
@@ -140,7 +146,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .calc:not(.free) .blk { display: contents; }
 /* 自由配置：ブロックを好きな位置・大きさに置く（位置は layout.js が % で入れる） */
 .calc.free { position: relative; display: block; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none; padding: 0; gap: 0; overflow: hidden; }
-.calc.free.rotated { position: fixed; left: 0; top: 0; transform-origin: 0 0; }
+.calc.rotated { position: fixed; left: 0; top: 0; margin: 0; transform-origin: 0 0; }
+.calc.rotated:not(.free).menu-open .nkeys { flex-basis: 34%; }
 .calc.free .blk { position: absolute; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 4px 6px; gap: 6px; container-type: size; }
 .calc.free .blk-lcd .bezel { flex: 1 1 0; min-height: 0; display: flex; }
 .calc.free .blk-lcd .lcd { flex: 1; display: flex; flex-direction: column; min-height: 0; }

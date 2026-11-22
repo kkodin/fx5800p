@@ -19,7 +19,12 @@
   let editing = null;
   let menuOpen = false;
   // 電卓のメニューを開いた・閉じた（app.js が呼ぶ）
-  function setMenu(open) { if (open === menuOpen) return; menuOpen = open; if (info.free) apply(); }
+  function setMenu(open) {
+    if (open === menuOpen) return;
+    menuOpen = open;
+    if (info.free) apply();
+    else if (!open) opt.onApply(info);
+  }
 
   function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
   function fix(s) {
@@ -46,16 +51,18 @@
     const o = st.orient === 'auto' ? natural : st.orient;
     const rotated = o !== natural;
     const W = rotated ? vh : vw, H = rotated ? vw : vh;
-    const L = st[o], free = L.mode === 'free' || rotated || !!editing;
+    const L = st[o], free = L.mode === 'free' || !!editing;
     info = { orient: o, free, rotated, W, H };
     document.documentElement.style.setProperty('--fs', String(FS[st.font - 1]));
     document.documentElement.classList.toggle('lo-free', free);
     calc.classList.toggle('free', free);
-    calc.classList.toggle('rotated', free && rotated);
+    calc.classList.toggle('rotated', rotated);
     calc.classList.toggle('lo-landscape', o === 'landscape');
-    if (free) {
-      calc.style.width = W + 'px'; calc.style.height = H + 'px';
-      calc.style.transform = rotated ? 'translateX(' + vw + 'px) rotate(90deg)' : '';
+    if (free || rotated) {
+      const width = free ? W : Math.min(W, 480);
+      const height = free ? H : Math.min(H, 980);
+      calc.style.width = width + 'px'; calc.style.height = height + 'px';
+      calc.style.transform = rotated ? 'translate(' + (vw - (H - height) / 2) + 'px,' + ((W - width) / 2) + 'px) rotate(90deg)' : '';
     } else { calc.style.width = calc.style.height = calc.style.transform = ''; }
     // メニューを開いている間（自由配置）は、ディスプレイを「上のボタン」の場所まで広げる（テンキーは残す）
     const menuBig = free && menuOpen && !editing;
@@ -80,11 +87,55 @@
 
   // ---- 配置を変える（ブロックを動かす・大きさを変える） ----
   function toLocal(dx, dy) { return info.rotated ? { dx: dy, dy: -dx } : { dx, dy }; }
+  function bindLcdResize() {
+    const handle = opt.calc.querySelector('#lcdResize');
+    let drag = null;
+    const resize = (layout, value) => {
+      const max = Number(handle.getAttribute('aria-valuemax'));
+      const next = Math.round(Math.min(max, Math.max(0, value)));
+      if (next === (layout.lcdExtra || 0)) return;
+      layout.lcdExtra = next;
+      opt.onApply(info);
+    };
+    handle.addEventListener('pointerdown', e => {
+      if (drag || e.button !== 0 || info.free || menuOpen) return;
+      e.preventDefault();
+      handle.focus({ preventScroll: true });
+      try { handle.setPointerCapture(e.pointerId); } catch { /* つまみの上ではそのまま動かせる */ }
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, layout: st[info.orient],
+        rotated: info.rotated, start: Number(handle.getAttribute('aria-valuenow')) };
+    });
+    handle.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id || info.free || menuOpen ||
+          drag.layout !== st[info.orient] || drag.rotated !== info.rotated) return;
+      resize(drag.layout, drag.start + toLocal(e.clientX - drag.x, e.clientY - drag.y).dy);
+    });
+    const finish = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag = null;
+      save();
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+    handle.addEventListener('lostpointercapture', finish);
+    handle.addEventListener('keydown', e => {
+      const current = Number(handle.getAttribute('aria-valuenow'));
+      const rotated = info.rotated;
+      const targets = { [rotated ? 'ArrowLeft' : 'ArrowDown']: current + 24,
+        [rotated ? 'ArrowRight' : 'ArrowUp']: current - 24,
+        Home: 0, End: Number(handle.getAttribute('aria-valuemax')) };
+      if (!Object.hasOwn(targets, e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      resize(st[info.orient], targets[e.key]);
+      save();
+    });
+  }
   function startEdit() {
     if (editing) return;
     const L = st[info.orient];
-    if (L.mode !== 'free') { L.mode = 'free'; }
     editing = { before: clone(L) };
+    L.mode = 'free';
     apply();
     const calc = opt.calc;
     calc.classList.add('lo-edit');
@@ -184,12 +235,13 @@
           h('p', { class: 'lo-note', text: 'ボタン・タブの画面・一覧の文字に効きます。' })]),
         h('div', {}, [h('h4', { text: 'ディスプレイの表示' }),
           seg([['wide', '見やすい表示（行と桁を増やす）'], ['real', '実機と同じ（16 桁×4 行）']], st.lcd, v => { st.lcd = v; save(); apply(); }),
-          h('p', { class: 'lo-note', text: '見やすい表示：自由配置でディスプレイを大きくすると、その分だけ行と桁が増えます。プログラムの実行中は、聞かれた値の横に答えと変数の名前を出し、前の入力・答えも残します。実機と同じ：実機と同じ 16 桁×4 行で表示します（Locate を使うプログラムの見た目を確かめるとき）。標準の並びのときは、どちらも 16 桁×4 行です。' }),
+          h('p', { class: 'lo-note', text: '見やすい表示では、ディスプレイの高さと幅に合わせて行と桁が増えます。プログラムの入力・答え・日本語の変数名も残します。実機の表示を確かめるときは「実機と同じ」を選ぶと 16 桁×4 行になります。' }),
           h('h4', { text: 'ディスプレイの文字（見やすい表示のとき）' }),
           seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], st.lcdFont, v => { st.lcdFont = v; save(); apply(); }),
           h('p', { class: 'lo-note', text: '小さくするほど、行と桁が増えます（16 桁より少なくはなりません）。' })]),
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
           seg([['standard', '標準の並び'], ['free', '自由配置']], st[info.orient].mode, v => { st[info.orient].mode = v; save(); apply(); updNote(); }),
+          h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
         h('div', {}, [h('h4', { text: '名前を付けて保存（いまの向きの配置と文字の大きさ）' }),
           h('div', { class: 'lo-new' }, [nameIn, h('button', { type: 'button', text: '保存', onclick: () => {
@@ -208,6 +260,7 @@
 
   function init(o) {
     opt = o; st = fix(o.load());
+    bindLcdResize();
     apply();
     let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(apply, 80); });
     if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', () => setTimeout(apply, 120));

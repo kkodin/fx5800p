@@ -9,21 +9,21 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=1.4.9">
-<script defer src="engine.js?v=1.4.9"></script>
-<script defer src="basic.js?v=1.4.9"></script>
-<script defer src="formulas.js?v=1.4.9"></script>
-<script defer src="import.js?v=1.4.9"></script>
-<script defer src="cclwrite.js?v=1.4.9"></script>
-<script defer src="complete.js?v=1.4.9"></script>
-<script defer src="dialog.js?v=1.4.9"></script>
-<script defer src="layout.js?v=1.4.9"></script>
-<script defer src="store.js?v=1.4.9"></script>
-<script defer src="pickxy.js?v=1.4.9"></script>
-<script defer src="proginfo.js?v=1.4.9"></script>
-<script defer src="sokusetsu.js?v=1.4.9"></script>
-<script defer src="senkei.js?v=1.4.9"></script>
-<script defer src="app.js?v=1.4.9"></script>
+<link rel="stylesheet" href="style.css?v=1.4.10">
+<script defer src="engine.js?v=1.4.10"></script>
+<script defer src="basic.js?v=1.4.10"></script>
+<script defer src="formulas.js?v=1.4.10"></script>
+<script defer src="import.js?v=1.4.10"></script>
+<script defer src="cclwrite.js?v=1.4.10"></script>
+<script defer src="complete.js?v=1.4.10"></script>
+<script defer src="dialog.js?v=1.4.10"></script>
+<script defer src="layout.js?v=1.4.10"></script>
+<script defer src="store.js?v=1.4.10"></script>
+<script defer src="pickxy.js?v=1.4.10"></script>
+<script defer src="proginfo.js?v=1.4.10"></script>
+<script defer src="sokusetsu.js?v=1.4.10"></script>
+<script defer src="senkei.js?v=1.4.10"></script>
+<script defer src="app.js?v=1.4.10"></script>
 </head>
 <body>
 <main class="calc" id="calc" aria-label="プログラム関数電卓">
@@ -34,6 +34,8 @@
       <div id="screen" class="screen" aria-live="polite"></div>
       <textarea id="editor" class="editor" hidden spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" inputmode="none" aria-label="プログラム編集"></textarea>
     </div>
+    <div id="lcdResize" class="lcd-resize" role="separator" tabindex="0" aria-orientation="horizontal"
+      aria-label="ディスプレイの高さ" aria-controls="screen" title="ドラッグまたは上下キーでディスプレイの高さを変更"></div>
   </div>
   <div class="bar">
     <button type="button" id="kbdBtn" class="mini">⌨ 文字入力</button>

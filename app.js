@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.9';
+  const VERSION = '1.4.10';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -97,9 +97,9 @@
   // ---- 液晶の描画 ------------------------------------------------------
   const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   function line(text, opt = {}) { return { text: text ?? '', ...opt }; }
-  // 液晶の行数（標準は 4。自由配置でディスプレイを高くすると増える）
+  // 液晶の行数（見やすい表示では、ディスプレイを高くすると増える）
   let LCD_ROWS = 4;
-  // 液晶の桁数と「見やすい表示」（自由配置で ▦ 配置 → ディスプレイの表示 が「見やすい表示」のとき）
+  // 液晶の桁数と「見やすい表示」（▦ 配置 → ディスプレイの表示）
   let LCD_COLS = 16, LCD_WIDE = false;
   // 増えた行に出す、直前の計算と答え（新しい順に最大 20 件）
   const scrollback = [];
@@ -1165,7 +1165,7 @@
   // 見やすい表示の実行画面：下から LCD_ROWS 行。聞かれている行は「KX? 100.123▮　既知点の X」
   function renderRunWide() {
     const g = run.grid, w = run.wait, asking = !run.done && w && w.type === 'input';
-    const hintHtml = t => t ? '<span class="lhint">' + esc(t) + '</span>' : '';
+    const hintHtml = t => t ? '<span class="lhint" title="' + esc(t).replace(/"/g, '&quot;') + '">' + esc(t) + '</span>' : '';
     let used = Math.max(g.row, g.maxRow);
     // 止まっている・終わったときは、いちばん下にどうすればよいかを出す
     const status = run.done ? (run.stopped ? '' : '― 終わり　EXE：もう一度　EXIT：一覧 ―') : (w && w.type === 'pause' ? '◢ EXE で続き' : '');
@@ -1184,6 +1184,10 @@
       else lines.push(line('', { html: esc(text.replace(/\s+$/, '')) + hintHtml(g.hints[i]) }));
     }
     if (status) lines.push(line(status, { small: true }));
+    if (LCD_ROWS > 4 && lines.length < LCD_ROWS && !run.prog.name.startsWith('(')) {
+      const title = B.meta(run.prog.source).title;
+      lines.unshift(line(title ? title + '　' + run.prog.name : run.prog.name, { small: true }));
+    }
     paint(lines);
   }
   function runKey(k) {
@@ -1468,31 +1472,47 @@
   // 見やすい表示のディスプレイの文字の大きさ（px）
   const LCD_FS = [13, 16, 19, 23, 28];
   function fitLcd() {
-    const scr = $('lcd');
-    const w = scr.clientWidth - 16;
+    const lcd = $('lcd'), calc = $('calc');
+    const layout = FxLayout.state, { free, orient } = FxLayout.info;
+    if (!free && mode === 'menu') return;
+    const style = getComputedStyle(lcd);
+    const w = lcd.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     // 16桁がちょうど入る文字の大きさ（等幅の文字幅は約0.6em）
     const probe = document.createElement('span'); probe.className = 'probe'; probe.textContent = '0000000000';
-    scr.append(probe);
+    lcd.append(probe);
     const cw = probe.getBoundingClientRect().width / 10 / parseFloat(getComputedStyle(probe).fontSize);
     probe.remove();
-    let fs = Math.min(30, w / 16 / (cw || 0.6));
-    let rows = 4, cols = 16;
-    const LS = window.FxLayout ? FxLayout.state : null;
-    const wide = !!(window.FxLayout && FxLayout.info.free && LS && LS.lcd === 'wide');
-    // 見やすい表示：文字の大きさを選んだ段（16 桁が入る大きさより大きくはしない）にし、入るだけ桁を増やす（16〜48 桁）
-    if (wide) {
-      fs = Math.max(10, Math.min(fs, LCD_FS[(LS.lcdFont || 3) - 1]));
-      cols = Math.min(48, Math.max(16, Math.floor(w / (fs * (cw || 0.6)))));
+    const wide = layout.lcd === 'wide';
+    const glyphWidth = cw || 0.6;
+    const maxFont = wide ? LCD_FS[layout.lcdFont - 1] : 30;
+    let fs = Math.max(8, Math.min(maxFont, w / (16 * glyphWidth)));
+    const rowHeight = 1.22, indicatorHeight = 0.72;
+    const padding = el => {
+      const css = getComputedStyle(el);
+      return parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+    };
+    let available = lcd.clientHeight - padding(lcd);
+    if (free) {
+      fs = Math.max(8, Math.min(fs, available / (4 * rowHeight + indicatorHeight)));
+    } else {
+      const bezel = lcd.parentElement;
+      const fixed = padding(calc) + 4 * parseFloat(getComputedStyle(calc).rowGap) + padding(bezel) + padding(lcd)
+        + calc.querySelector('.top').offsetHeight + calc.querySelector('.bar').offsetHeight;
+      // 4 段ずつの関数キーとテンキーが押せる高さを残す。
+      const keypadHeight = 300;
+      const base = fs * (4 * rowHeight + indicatorHeight);
+      const max = Math.max(0, Math.floor(Math.min(36 * rowHeight * fs, calc.clientHeight - fixed - base - keypadHeight)));
+      const extra = Math.max(0, Math.min(max, Number(layout[orient].lcdExtra) || 0));
+      calc.style.setProperty('--lcd-extra', extra + 'px');
+      const handle = $('lcdResize');
+      handle.setAttribute('aria-valuemin', '0');
+      handle.setAttribute('aria-valuemax', String(max));
+      handle.setAttribute('aria-valuenow', String(extra));
+      available = base + extra;
     }
-    // 自由配置：ディスプレイの高さから行数を決める（4〜14 行）。4 行も入らないときは文字を小さくする
-    if (window.FxLayout && FxLayout.info.free) {
-      const blk = document.querySelector('.blk-lcd'), bar = blk.querySelector('.bar');
-      const avail = blk.clientHeight - (bar ? bar.offsetHeight : 0) - 6 /* 隙間 */ - 18 /* 枠 */ - 8 /* 液晶の余白 */;
-      const per = (f) => f * 1.22, indH = f => f * 0.72;
-      rows = Math.floor((avail - indH(fs)) / per(fs));
-      if (rows < 4) { fs = Math.max(9, (avail) / (4 * 1.22 + 0.72)); rows = 4; }
-      rows = Math.min(wide ? 40 : 14, Math.max(4, rows));
-    }
+    const rows = wide ? Math.max(4, Math.min(40, Math.floor((available / fs - indicatorHeight) / rowHeight + 0.001))) : 4;
+    const cols = wide ? Math.min(48, Math.max(16, Math.floor(w / (fs * glyphWidth)))) : 16;
+    $('lcdResize').setAttribute('aria-valuetext', rows + ' 行');
     document.documentElement.style.setProperty('--lcd-fs', fs.toFixed(2) + 'px');
     document.documentElement.style.setProperty('--rows', String(rows));
     LCD_ROWS = rows; LCD_COLS = cols; LCD_WIDE = wide;
