@@ -9,17 +9,20 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=1.4.3">
-<script defer src="engine.js?v=1.4.3"></script>
-<script defer src="basic.js?v=1.4.3"></script>
-<script defer src="formulas.js?v=1.4.3"></script>
-<script defer src="import.js?v=1.4.3"></script>
-<script defer src="cclwrite.js?v=1.4.3"></script>
-<script defer src="complete.js?v=1.4.3"></script>
-<script defer src="app.js?v=1.4.3"></script>
+<link rel="stylesheet" href="style.css?v=1.4.4">
+<script defer src="engine.js?v=1.4.4"></script>
+<script defer src="basic.js?v=1.4.4"></script>
+<script defer src="formulas.js?v=1.4.4"></script>
+<script defer src="import.js?v=1.4.4"></script>
+<script defer src="cclwrite.js?v=1.4.4"></script>
+<script defer src="complete.js?v=1.4.4"></script>
+<script defer src="dialog.js?v=1.4.4"></script>
+<script defer src="layout.js?v=1.4.4"></script>
+<script defer src="app.js?v=1.4.4"></script>
 </head>
 <body>
-<main class="calc" aria-label="プログラム関数電卓">
+<main class="calc" id="calc" aria-label="プログラム関数電卓">
+  <div class="blk blk-lcd" data-blk="lcd">
   <div class="bezel">
     <div id="lcd" class="lcd">
       <div id="ind" class="ind"></div>
@@ -31,8 +34,11 @@
     <button type="button" id="kbdBtn" class="mini">⌨ 文字入力</button>
     <span id="ver" class="ver"></span>
     <div id="cands" class="cands" hidden aria-label="入力候補"></div>
+    <button type="button" id="layoutBtn" class="mini" title="ボタン・ディスプレイの配置と大きさ、縦横、文字の大きさ">▦ 配置</button>
     <button type="button" id="helpBtn" class="mini">? 使い方</button>
   </div>
+  </div>
+  <div class="blk blk-upper" data-blk="upper">
   <div class="top">
     <div class="round">
       <span class="lab">MODE <em>SETUP</em></span>
@@ -51,7 +57,19 @@
     </div>
   </div>
   <div id="fkeys" class="keypad fkeys"></div>
+  </div>
+  <div class="blk blk-nkeys" data-blk="nkeys">
   <div id="nkeys" class="keypad nkeys"></div>
+  </div>
+  <div class="blk blk-tabs" data-blk="tabs" hidden>
+    <div class="tabs-head" role="tablist">
+      <button type="button" data-tab="fn" class="on">関数</button>
+      <button type="button" data-tab="prog">プログラム</button>
+      <button type="button" data-tab="var">変数</button>
+      <button type="button" data-tab="hist">履歴</button>
+    </div>
+    <div id="tabsBody" class="tabs-body"></div>
+  </div>
 </main>
 <input type="file" id="fileIn" hidden>
 <input type="text" id="kbd" class="kbd" autocapitalize="characters" autocomplete="off" aria-label="名前入力">

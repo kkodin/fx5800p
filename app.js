@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.3';
+  const VERSION = '1.4.4';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -97,9 +97,13 @@
   // ---- 液晶の描画 ------------------------------------------------------
   const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   function line(text, opt = {}) { return { text: text ?? '', ...opt }; }
+  // 液晶の行数（標準は 4。自由配置でディスプレイを高くすると増える）
+  let LCD_ROWS = 4;
+  // 増えた行に出す、直前の計算と答え（新しい順に最大 20 件）
+  const scrollback = [];
   function paint(lines) {
     const out = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < LCD_ROWS; i++) {
       const l = lines[i] || line('');
       let html;
       if (l.html !== undefined) html = l.html;
@@ -148,6 +152,8 @@
   const fmtVal = (v, how) => how === 'dms' ? E.formatDMS(v) : how === 'frac' ? (E.toFraction(v) || E.formatNumber(v, S.disp)) : E.formatNumber(v, S.disp);
 
   function render() {
+    // タブの画面の「変数」「履歴」は、計算のたびに描き直す
+    queueMicrotask(() => { if (tab === 'var' || tab === 'hist') renderTabs(); });
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
     document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
@@ -172,13 +178,27 @@
     const text = compText();
     const curIdx = comp.shown ? -1 : comp.toks.slice(0, comp.cur).join('').length;
     const r = comp.shown;
-    if (!r) { paint(wrapWithCursor(text, curIdx, 4)); return; }
+    // 行が 4 より多いときは、上に直前の計算と答えを出す（今の計算は下の 4 行）
+    const extra = Math.max(0, LCD_ROWS - 4);
+    const older = () => {
+      if (!extra) return [];
+      const past = scrollback.filter(x => x.obj !== r).slice(0, Math.ceil(extra / 2)).reverse();
+      const ls = [];
+      for (const x of past) ls.push(line(x.label.slice(0, 16), { small: false }), line(x.value, { right: true }));
+      while (ls.length < extra) ls.unshift(line(''));
+      return ls.slice(-extra);
+    };
+    if (!r) { paint(older().concat(wrapWithCursor(text, curIdx, 4))); return; }
     const lines = wrapWithCursor(r.label ?? text, -1, r.pair ? 2 : 3);
     while (lines.length < (r.pair ? 2 : 3)) lines.push(line(''));
     if (r.pair) {
       lines.push(line(r.pair.a[0] + '=' + E.formatNumber(r.pair.a[1], S.disp)), line(r.pair.b[0] + '=' + (r.pair.angleB && r.how === 'dms' ? E.formatDMS(r.pair.b[1]) : E.formatNumber(r.pair.b[1], S.disp))));
     } else lines.push(line(r.text ?? fmtVal(r.value, r.how), { right: true }));
-    paint(lines);
+    if (!scrollback.length || scrollback[0].obj !== r) {
+      scrollback.unshift({ obj: r, label: String(r.label ?? text), value: r.pair ? r.pair.a[0] + '=' + E.formatNumber(r.pair.a[1], S.disp) : (r.text ?? fmtVal(r.value, r.how)) });
+      scrollback.length = Math.min(scrollback.length, 20);
+    }
+    paint(older().concat(lines));
   }
   function compInsert(s) {
     if (comp.shown) {
@@ -451,6 +471,66 @@
   }
   // 説明を見る画面（メニューの上に出す。EXE・EXIT・戻るで閉じる）
   function openHelpView(title, text) { menu.view = { title, text }; }
+
+  // ---- タブの画面（自由配置のとき：関数・プログラム・変数・履歴） ----------
+  let tab = 'fn';
+  function tabsVisible() { const el = document.querySelector('.blk-tabs'); return el && !el.hidden; }
+  function renderTabs() {
+    if (!tabsVisible()) return;
+    const body = $('tabsBody'); if (!body) return;
+    document.querySelectorAll('.tabs-head [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    const showDesc = S.showDesc !== false;
+    let html = '';
+    if (tab === 'fn') {
+      for (const [g, list] of FN_GROUPS) {
+        html += '<div class="tb-h">' + esc(g) + '</div><div class="tb-grid">';
+        list.forEach((x, i) => {
+          const [lab, val] = x.includes('|') ? x.split('|') : [x, x];
+          const name = lab.trim() || lab, hh = FN_HELP[name] || [];
+          html += '<button type="button" class="tb-it" data-ins="' + esc(val) + '" title="' + esc((hh[0] || '') + (hh[1] ? '\n' + hh[1] : '')) + '"><b>' + esc(name) + '</b>' + (showDesc && hh[0] ? '<small>' + esc(hh[0]) + '</small>' : '') + '</button>';
+        });
+        html += '</div>';
+      }
+    } else if (tab === 'prog') {
+      const list = sortedPrograms();
+      if (!list.length) html = '<div class="tb-empty">プログラムがありません</div>';
+      for (const p of list) {
+        const md = B.meta(p.source);
+        html += '<div class="tb-row"><span class="nm">' + esc(p.name) + '</span><span class="ds">' + esc(md.summary || p.title || '') + '</span><span style="margin-left:auto;display:flex;gap:4px">'
+          + (md.help ? '<button type="button" data-phelp="' + esc(p.name) + '">？</button>' : '')
+          + '<button type="button" data-run="' + esc(p.name) + '">▶ 実行</button></span></div>';
+      }
+    } else if (tab === 'var') {
+      const vs = ['Ans'].concat(LETTERS.split ? LETTERS.split('') : Array.from(LETTERS));
+      for (const v of vs) html += '<div class="tb-row" data-ins="' + v + '" style="cursor:pointer"><span class="nm">' + v + '</span><span class="vl">' + esc(E.formatNumber(S.vars[v] || 0, S.disp)) + '</span></div>';
+      html += '<div class="tb-row"><span class="nm">Z[ ]</span><span class="vl">' + (S.vars.__dim || 0) + ' 個</span></div>';
+    } else if (tab === 'hist') {
+      if (!S.history.length) html = '<div class="tb-empty">まだ計算の履歴がありません</div>';
+      S.history.forEach((t, i) => { html += '<div class="tb-row" data-hist="' + i + '" style="cursor:pointer"><span class="nm">' + esc(t.join('')) + '</span></div>'; });
+    }
+    body.innerHTML = html;
+  }
+  function bindTabs() {
+    document.querySelectorAll('.tabs-head [data-tab]').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); }));
+    $('tabsBody').addEventListener('click', e => {
+      const ins = e.target.closest('[data-ins]'), run1 = e.target.closest('[data-run]'), ph = e.target.closest('[data-phelp]'), hi = e.target.closest('[data-hist]');
+      if (ins) {
+        if (mode === 'menu') mode = 'comp';
+        insertText(ins.dataset.ins);
+      } else if (run1) {
+        const p = S.programs.find(x => x.name === run1.dataset.run); if (!p) return;
+        if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list');
+      } else if (ph) {
+        const p = S.programs.find(x => x.name === ph.dataset.phelp); if (!p) return;
+        const md = B.meta(p.source);
+        openMenu('プログラム', [{ label: p.name, desc: md.summary, help: md.help, act: () => {} }], { back: () => { mode = 'comp'; } });
+        openHelpView(p.name, p.name + (md.summary ? '\n' + md.summary : '') + '\n\n' + md.help);
+      } else if (hi) {
+        mode = 'comp'; comp.toks = S.history[Number(hi.dataset.hist)].slice(); comp.cur = comp.toks.length; comp.shown = null;
+      } else return;
+      render();
+    });
+  }
   // 入力中の場所へ文字を入れる（COMP・代入画面・名前・エディタ・プログラム入力）
   function insertText(s) {
     if (mode === 'comp') return compInsert(s);
@@ -1263,8 +1343,20 @@
     scr.append(probe);
     const cw = probe.getBoundingClientRect().width / 10 / parseFloat(getComputedStyle(probe).fontSize);
     probe.remove();
-    const fs = Math.min(30, w / 16 / (cw || 0.6));
+    let fs = Math.min(30, w / 16 / (cw || 0.6));
+    let rows = 4;
+    // 自由配置：ディスプレイの高さから行数を決める（4〜14 行）。4 行も入らないときは文字を小さくする
+    if (window.FxLayout && FxLayout.info.free) {
+      const blk = document.querySelector('.blk-lcd'), bar = blk.querySelector('.bar');
+      const avail = blk.clientHeight - (bar ? bar.offsetHeight : 0) - 6 /* 隙間 */ - 18 /* 枠 */ - 8 /* 液晶の余白 */;
+      const per = (f) => f * 1.22, indH = f => f * 0.72;
+      rows = Math.floor((avail - indH(fs)) / per(fs));
+      if (rows < 4) { fs = Math.max(9, (avail) / (4 * 1.22 + 0.72)); rows = 4; }
+      rows = Math.min(14, Math.max(4, rows));
+    }
     document.documentElement.style.setProperty('--lcd-fs', fs.toFixed(2) + 'px');
+    document.documentElement.style.setProperty('--rows', String(rows));
+    LCD_ROWS = rows;
   }
   function physicalKeys() {
     const map = { Enter: 'EXE', Backspace: 'DEL', Escape: 'AC', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', '+': 'ADD', '-': 'SUB', '*': 'MUL', '/': 'DIV', '(': 'LP', ')': 'RP', ',': 'COMMA', '.': 'DOT', '^': 'POW' };
@@ -1358,8 +1450,19 @@
     $('helpBtn').addEventListener('click', () => { $('help').open = true; $('help').scrollIntoView({ behavior: 'smooth' }); });
     $('ver').textContent = 'v' + VERSION;
     physicalKeys();
+    // 配置（▦ 配置）：縦横・ブロックの位置と大きさ・文字の大きさ。保存は S.layout
+    FxLayout.init({
+      calc: $('calc'),
+      load: () => S.layout,
+      save: s => { S.layout = s; save(); },
+      toast,
+      onApply: () => { fitLcd(); render(); renderTabs(); }
+    });
+    $('layoutBtn').addEventListener('click', () => FxLayout.openSettings());
+    bindTabs();
     fitLcd();
     window.addEventListener('resize', fitLcd);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { const r0 = LCD_ROWS; fitLcd(); if (LCD_ROWS !== r0) render(); }).observe(document.querySelector('.blk-lcd'));
     render();
     migrateOld();
     // PC エディターで直したプログラムを、開いている電卓にもすぐ反映する
