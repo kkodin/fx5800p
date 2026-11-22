@@ -60,9 +60,8 @@
     calc.classList.toggle('lo-landscape', o === 'landscape');
     if (free || rotated) {
       const width = free ? W : Math.min(W, 480);
-      const height = free ? H : Math.min(H, 980);
-      calc.style.width = width + 'px'; calc.style.height = height + 'px';
-      calc.style.transform = rotated ? 'translate(' + (vw - (H - height) / 2) + 'px,' + ((W - width) / 2) + 'px) rotate(90deg)' : '';
+      calc.style.width = width + 'px'; calc.style.height = H + 'px';
+      calc.style.transform = rotated ? 'translate(' + vw + 'px,' + ((W - width) / 2) + 'px) rotate(90deg)' : '';
     } else { calc.style.width = calc.style.height = calc.style.transform = ''; }
     // メニューを開いている間（自由配置）は、ディスプレイを「上のボタン」の場所まで広げる（テンキーは残す）
     const menuBig = free && menuOpen && !editing;
@@ -202,7 +201,7 @@
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   }
 
-  // ---- 設定の画面（▦ 配置） ----
+  // ---- 設定の画面（SETUP → 配置） ----
   function openSettings() {
     const D = root.FxDialog, h = D.h;
     let dlg = null;

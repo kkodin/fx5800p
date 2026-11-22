@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.11';
+  const VERSION = '1.4.12';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -160,6 +160,12 @@
     // タブの画面の「変数」「履歴」は、計算のたびに描き直す
     queueMicrotask(() => { if (tab === 'var' || tab === 'hist') renderTabs(); });
     if (mode !== 'run') setHint('');
+    const kbdBtn = $('kbdBtn');
+    kbdBtn.hidden = mode !== 'edit' && !(mode === 'name' && nameIn.step === 'name');
+    if (!kbdBtn.hidden) kbdBtn.textContent = mode === 'name' ? '名前をキーボードで入力'
+      : $('editor').inputMode === 'text' ? 'キーボードを閉じる' : 'キーボードで編集';
+    const resultBtn = $('resultBtn');
+    if (resultBtn) resultBtn.hidden = !currentResult();
     // 値を聞かれている間だけ「座標一覧から」を出す
     $('xyBtn').hidden = !(mode === 'run' && run && !run.done && run.wait && run.wait.type === 'input');
     const lcd = $('lcd');
@@ -183,6 +189,70 @@
 
   // ---- COMP（通常計算） ------------------------------------------------
   const compText = () => comp.toks.join('');
+  function currentResult() {
+    if (mode === 'run' && run?.results.length) {
+      const lines = [];
+      run.results.forEach(({ text, value }, i) => {
+        if (value && i > 0 && !run.results[i - 1].value) lines[lines.length - 1] += '  ' + text;
+        else lines.push(text);
+      });
+      return [run.prog.name, ...lines].join('\n');
+    }
+    if (mode === 'comp' && comp.shown) {
+      const r = comp.shown;
+      const values = r.pair ? [
+        r.pair.a[0] + ' = ' + E.formatNumber(r.pair.a[1], S.disp),
+        r.pair.b[0] + ' = ' + fmtVal(r.pair.b[1], r.pair.angleB && r.how === 'dms' ? 'dms' : 'norm')
+      ] : [r.text ?? fmtVal(r.value, r.how)];
+      return [r.label ?? compText(), ...values].filter(Boolean).join('\n');
+    }
+    if (mode === 'calc' && calc.phase === 'result') {
+      return [calc.text, (calc.resultVar ? calc.resultVar + ' = ' : '') + fmtVal(calc.result.value, calc.result.how)].join('\n');
+    }
+    if (mode === 'solve' && solve.phase === 'result') {
+      const name = solve.vars[solve.idx];
+      return [solve.text, name + ' = ' + E.formatNumber(S.vars[name], S.disp),
+        'L-R = ' + E.formatNumber(solve.result.res, S.disp)].join('\n');
+    }
+    if (mode === 'fmla' && fm.phase === 'out' && fm.outs.length) {
+      return [fm.f.name, ...fm.outs.map(o => o.name + ' = ' + fmtVal(o.value, o.how))].join('\n');
+    }
+    return '';
+  }
+
+  function openResult() {
+    const text = currentResult();
+    if (!text) return;
+    const D = FxDialog, h = D.h;
+    const field = h('textarea', { class: 'result-text', readonly: true, 'aria-label': '計算結果のテキスト' });
+    field.value = text;
+    field.rows = Math.min(12, Math.max(3, text.split('\n').length));
+    const status = h('p', { class: 'result-status', role: 'status', hidden: true });
+    const say = message => { status.hidden = false; status.textContent = message; };
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        say('計算結果をコピーしました。');
+      } catch {
+        field.focus();
+        field.select();
+        field.setSelectionRange(0, field.value.length);
+        say('選択したテキストを端末の「コピー」でコピーできます。');
+      }
+      return false;
+    };
+    const share = async () => {
+      try {
+        await navigator.share({ text });
+      } catch (error) {
+        if (error.name !== 'AbortError') say('共有を開けませんでした。「コピー」で結果を渡せます。');
+      }
+      return false;
+    };
+    const buttons = [{ label: '閉じる' }, { label: 'コピー', kind: 'primary', onClick: copy }];
+    if (navigator.share) buttons.splice(1, 0, { label: '共有', onClick: share });
+    D.open({ title: '計算結果', width: 480, body: [field, status], buttons });
+  }
   function renderComp() {
     const text = compText();
     const curIdx = comp.shown ? -1 : comp.toks.slice(0, comp.cur).join('').length;
@@ -849,10 +919,12 @@
   function openSetup() {
     remember();
     const self = () => openSetup();
-    openMenu('SETUP 角度・表示', [
+    openMenu('SETUP 設定', [
       ...angleItems(),
       ...dispItems(self),
-      { label: 'ClrMemory 変数を0に', act: () => askConfirm('A〜Z・Z[ ]・M を0にしますか', () => { const keep = S.vars.Ans; S.vars = blankVars(); S.vars.Ans = keep; save(); toComp(); toast('変数をクリアしました'); }, self) }
+      { label: 'ClrMemory 変数を0に', act: () => askConfirm('A〜Z・Z[ ]・M を0にしますか', () => { const keep = S.vars.Ans; S.vars = blankVars(); S.vars.Ans = keep; save(); toComp(); toast('変数をクリアしました'); }, self) },
+      { label: '配置', act: () => { toComp(); FxLayout.openSettings(); } },
+      { label: '使い方（別タブ）', act: () => window.open('help.html', '_blank', 'noopener') }
     ], { back: toComp });
   }
   // 液晶の「D」「Fix」などをタップしたとき
@@ -1025,6 +1097,12 @@
   //   実機と同じ（wide でない）：16 桁×4 行。見やすい表示（wide）：桁は LCD_COLS、行は 80 行まで残して下から LCD_ROWS 行を出す
   //   right[i]：右寄せの行（答え）。hints[i]：その行の右に小さく出す変数の名前
   const GRID_KEEP = 80;
+  function recordResult(text, value = false) {
+    text = String(text).trim();
+    if (!text) return;
+    run.results.push({ text, value });
+    if (run.results.length > GRID_KEEP) run.results.shift();
+  }
   const blankRow = n => Array(n).fill(' ');
   function newGrid() {
     const wide = LCD_WIDE;
@@ -1038,18 +1116,21 @@
   }
   const io = {
     cls() { run.grid = newGrid(); },
-    print(text) {
+    print(text, record = true) {
+      if (record) recordResult(text);
       const g = run.grid, ch = Array.from(String(text)), W = gridW(g);
       let i = 0;
       do { gridNewLine(g); g.rows[g.row] = Array.from({ length: W }, (_, j) => ch[i + j] ?? ' '); g.right[g.row] = false; g.hints[g.row] = ''; g.row++; i += W; } while (i < ch.length);
     },
-    printValue(text) {
+    printValue(text, record = true) {
+      if (record) recordResult(text, true);
       const g = run.grid;
       if (g.wide) { gridNewLine(g); g.rows[g.row] = Array.from(String(text)); g.right[g.row] = true; g.hints[g.row] = ''; g.row++; return; }
       const ch = Array.from(String(text)).slice(-16);
       gridNewLine(g); g.rows[g.row] = Array.from({ length: 16 }, (_, j) => ch[j - (16 - ch.length)] ?? ' '); g.row++;
     },
     locate(x, y, text) {
+      recordResult(text);
       const g = run.grid, W = gridW(g), ch = Array.from(String(text));
       gridEnsure(g, y - 1);
       if (g.right[y - 1]) { const r = g.rows[y - 1]; g.rows[y - 1] = Array.from({ length: W }, (_, j) => r[j - (W - r.length)] ?? ' '); g.right[y - 1] = false; }
@@ -1068,7 +1149,7 @@
         onAngle: a => { S.angle = a; }, onDisp: d => { S.disp = d; }
       });
     } catch (e) { showError(e, from === 'comp' ? 'comp' : 'runlist'); return; }
-    run = { gen, prog: p, from, grid: newGrid(), wait: null, done: false, stopped: false, inToks: [], inCur: 0 };
+    run = { gen, prog: p, from, grid: newGrid(), results: [], wait: null, done: false, stopped: false, inToks: [], inCur: 0 };
     if (!p.name.startsWith('(')) S.lastProg = p.name;   // 変数のタブで、このプログラムの変数の名前を出す
     mode = 'run'; lastKeyCode = 0;
     pump();
@@ -1093,7 +1174,7 @@
           token.wait = ev; token.inToks = []; token.inCur = 0;
           if (token.grid.wide) {
             // 見やすい表示：聞かれた行の「?」の右に入力し、変数の名前を右に小さく出す。前の入力・答えは上に残す
-            io.print(ev.label + '?');
+            io.print(ev.label + '?', false);
             const g = token.grid;
             token.inRow = g.row - 1;
             token.inPrefix = g.rows[token.inRow].join('').replace(/\s+$/, '') + ' ';
@@ -1101,8 +1182,8 @@
             g.hints[token.inRow] = runHint();
             render(); return;
           }
-          io.print(ev.label + '?');
-          if (ev.keep) io.printValue(ev.currentText); else gridNewLine(token.grid);
+          io.print(ev.label + '?', false);
+          if (ev.keep) io.printValue(ev.currentText, false); else gridNewLine(token.grid);
           token.inRow = Math.min(token.grid.row - (ev.keep ? 1 : 0), 3);
           if (!ev.keep) token.grid.row = Math.min(token.grid.row, 3);
           render(); return;
@@ -1197,7 +1278,7 @@
       if (id === 'EXIT' || id === 'AC') { if (run.from === 'comp') { mode = 'comp'; comp.shown = { value: S.vars.Ans, how: 'norm', label: comp.toks.join('') }; } else openProgList('RUN', run.prog.name); run = null; return; }
       return;
     }
-    if (id === 'AC') { run.stopped = true; run.done = true; run.wait = null; io.print('Break'); save(); return; }
+    if (id === 'AC') { run.stopped = true; run.done = true; run.wait = null; io.print('Break', false); save(); return; }
     const w = run.wait;
     if (!w) { lastKeyCode = k.code || 0; return; } // 実行中：Getkey 用に記録するだけ
     if (w.type === 'pause') { if (id === 'EXE') { run.wait = null; pump(); } return; }
@@ -1219,7 +1300,7 @@
       pump(text);
       return;
     }
-    if (id === 'EXIT') { run.stopped = true; run.done = true; run.wait = null; io.print('Break'); return; }
+    if (id === 'EXIT') { run.stopped = true; run.done = true; run.wait = null; io.print('Break', false); return; }
     if (id === 'DEL') { if (run.inCur > 0) { run.inToks.splice(run.inCur - 1, 1); run.inCur--; } return; }
     if (id === 'LEFT' || id === 'RIGHT') { run.inCur = Math.max(0, Math.min(run.inToks.length, run.inCur + (id === 'LEFT' ? -1 : 1))); return; }
     const s = shift ? k.sins : k.ins;
@@ -1577,6 +1658,7 @@
   }
 
   function init() {
+    document.documentElement.classList.add('calculator-page');
     load();
     buildKeys();
     // 液晶のタップは「液晶の上で押して液晶の上で離した」ときだけ受ける。
@@ -1601,17 +1683,17 @@
       if (mode === 'edit') {
         const ta = $('editor'), on = ta.inputMode !== 'text';
         ta.inputMode = on ? 'text' : 'none'; $('kbdBtn').classList.toggle('on', on);
-        ta.blur(); ta.focus();
-      } else if (mode === 'name') {
+        ta.blur(); if (on) ta.focus();
+        render();
+      } else if (mode === 'name' && nameIn.step === 'name') {
         const k = $('kbd'); k.value = ''; k.focus();
-      } else toast('文字キーボードは プログラム編集・名前入力 で使えます');
+      }
     });
     $('kbd').addEventListener('input', e => {
       if (mode !== 'name') return;
       nameIn.text = (nameIn.text + e.target.value.toUpperCase()).slice(0, 12); e.target.value = ''; render();
     });
     $('kbd').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('kbd').blur(); press('EXE'); } else if (e.key === 'Backspace') { e.preventDefault(); press('DEL'); } });
-    $('helpBtn').addEventListener('click', () => { $('help').open = true; $('help').scrollIntoView({ behavior: 'smooth' }); });
     $('ver').textContent = 'v' + VERSION;
     // 「実機用プログラム」の説明の .txt ごと取り込まれたプログラム（先頭が「■ NINI：…」）は、開いたときに本文だけに直す
     if (window.FxProgInfo) {
@@ -1637,11 +1719,28 @@
       toast,
       onApply: () => { fitLcd(); render(); renderTabs(); }
     });
-    $('layoutBtn').addEventListener('click', () => FxLayout.openSettings());
+    // 更新前の画面が使われたときも、旧ボタンと下部の説明を取り除く。
+    $('layoutBtn')?.remove();
+    $('helpBtn')?.remove();
+    $('help')?.remove();
+    const resultBtn = document.createElement('button');
+    resultBtn.id = 'resultBtn'; resultBtn.type = 'button'; resultBtn.className = 'mini';
+    resultBtn.textContent = '結果'; resultBtn.hidden = true;
+    resultBtn.setAttribute('aria-label', '計算結果をコピー・共有');
+    resultBtn.addEventListener('click', openResult);
+    $('ver').before(resultBtn);
     bindTabs();
     fitLcd();
     window.addEventListener('resize', fitLcd);
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { const r0 = LCD_ROWS, c0 = LCD_COLS; fitLcd(); if (LCD_ROWS !== r0 || LCD_COLS !== c0) render(); }).observe(document.querySelector('.blk-lcd'));
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        const r0 = LCD_ROWS, c0 = LCD_COLS;
+        fitLcd();
+        if (LCD_ROWS !== r0 || LCD_COLS !== c0) render();
+      });
+      observer.observe(document.querySelector('.blk-lcd'));
+      observer.observe(resultBtn.parentElement);
+    }
     render();
     migrateOld();
     // PC エディターで直したプログラムを、開いている電卓にもすぐ反映する
