@@ -1,0 +1,46 @@
+﻿■ NINI：任意点設置と測設（既知点 N 点・高さ）
+使う変数：A〜I・J・K・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z（全部）
+大きさ：531 バイト
+
+【解説】
+Z 1/0：高さも出すなら 1（HI＝器械高、HT＝ターゲット高）
+N：見る既知点の数（2 点以上）
+既知点ごとに KX・KY（座標）、HA（水平角、°′″ キー）、HD（水平距離）。高さありなら KZ（標高）、VD（高低差）
+SCALE（1 に近いほどよい）、RMS(MM)（観測のばらつき）、OX・OY（器械点）、OZ（地盤高）が出る
+PX・PY を入れるたびに HA・HD。高さありなら PZ（計画高）で、合わせる VD が出る。AC で終わり
+SUB の HADI を使う（一緒に送る）。A〜Z を全部使う
+
+【プログラム（実機に打ち込む文）】
+Deg:Fix 3
+"Z 1/0"?→O
+If O=1:Then "HI"?→R:"HT"?→T:IfEnd
+"N"?→N
+0→A:0→B:0→C:0→D:0→E:0→F:0→G:0→M:0→S
+For 1→K To N
+"KX"?→P:"KY"?→Q
+If K=1:Then P→U:Q→V:IfEnd
+P-U→P:Q-V→Q
+"HA"?→H:"HD"?→L
+Rec(L,H)
+A+I→A:B+J→B:C+P→C:D+Q→D
+E+I×P+J×Q→E:F+I×Q-J×P→F
+G+I²+J²→G:M+P²+Q²→M
+If O=1:Then "KZ"?→Z:"VD"?→H:S+Z+T-H-R→S:IfEnd
+Next
+E-(A×C+B×D)÷N→E
+F-(A×D-B×C)÷N→F
+G-(A²+B²)÷N→G
+M-(C²+D²)÷N→M
+Pol(E,F):J→W
+"SCALE":I÷G◢
+"RMS(MM)":√(Abs(M+G-2I)÷(2N-3))×1000◢
+Pol(A,B):Rec(I,J+W)
+(C-I)÷N+U→U:(D-J)÷N+V→V
+"OX":U◢
+"OY":V◢
+If O=1:Then S÷N→S:"OZ":S◢IfEnd
+Lbl 1
+"PX"?→X:"PY"?→Y
+Prog "HADI"
+If O=1:Then "PZ"?→Z:"VD":Z+T-S-R◢IfEnd
+Goto 1

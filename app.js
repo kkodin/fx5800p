@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.2';
+  const VERSION = '1.4.3';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -331,12 +331,24 @@
   // メニューは液晶を大きく広げ、指で選びやすい一覧にする（短い項目はボタンを並べる）
   function renderMenu() {
     const m = menu;
-    const short = m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9);
+    if (m.view) {
+      // 説明を見る画面
+      $('screen').innerHTML = '<div class="menu-head"><button type="button" class="mback" data-tap="back">◀ 戻る</button><b>' + esc(m.view.title) + '</b></div>'
+        + '<div class="menu-help">' + esc(m.view.text) + '</div>';
+      indicators(); return;
+    }
+    const hasDesc = m.items.some(it => it.desc || it.help);
+    const showDesc = hasDesc && S.showDesc !== false;
+    const short = !showDesc && m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9);
     const items = m.items.map((it, i) =>
-      '<button type="button" class="mi' + (i === m.sel ? ' sel' : '') + '" data-tap="' + i + '">' +
-      (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lb">' + esc(it.label) + '</span></button>').join('');
+      '<div class="mrow' + (showDesc ? ' desc' : '') + '"><button type="button" class="mi' + (i === m.sel ? ' sel' : '') + '" data-tap="' + i + '">' +
+      (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lbw"><span class="lb">' + esc(it.label) + '</span>'
+      + (showDesc && it.desc ? '<span class="ds">' + esc(it.desc) + '</span>' : '') + '</span></button>'
+      + (showDesc && it.help ? '<button type="button" class="mhelp" data-tap="h' + i + '" aria-label="' + esc(it.label) + ' の解説">？</button>' : '') + '</div>').join('');
     $('screen').innerHTML =
-      '<div class="menu-head"><button type="button" class="mback" data-tap="back">◀ 戻る</button><b>' + esc(m.title) + '</b><span class="mcount">' + m.items.length + '件</span></div>' +
+      '<div class="menu-head"><button type="button" class="mback" data-tap="back">◀ 戻る</button><b>' + esc(m.title) + '</b>'
+      + (hasDesc ? '<button type="button" class="mdesc' + (showDesc ? ' on' : '') + '" data-tap="desc" title="説明を出す・隠す">説明 ' + (showDesc ? '表示' : '隠す') + '</button>' : '')
+      + '<span class="mcount">' + m.items.length + '件</span></div>' +
       '<div class="menu-list' + (short ? ' grid' : '') + '">' + (items || '<div class="empty">（なし）</div>') + '</div>';
     const sel = $('screen').querySelector('.mi.sel');
     if (sel) sel.scrollIntoView({ block: 'nearest' });
@@ -344,6 +356,7 @@
   }
   function menuKey(k) {
     const m = menu, id = k.id;
+    if (m.view) { if (['EXIT', 'AC', 'EXE'].includes(id)) m.view = null; return; }
     if (id === 'UP') { m.sel = (m.sel - 1 + m.items.length) % Math.max(1, m.items.length); return; }
     if (id === 'DOWN') { m.sel = (m.sel + 1) % Math.max(1, m.items.length); return; }
     if (id === 'EXE') { const it = m.items[m.sel]; if (it) it.act(); return; }
@@ -362,14 +375,82 @@
     ['ANGLE 角度', ['°', '▸DMS', 'Deg', 'Rad', 'Gra']],
     ['DISP 表示', ['Fix |Fix ', 'Sci |Sci ', 'Norm |Norm ']]
   ];
+  // FUNCTION の説明：[何をするか（一覧に出す 1 行）, 使い方と例（？で開く）]
+  const FN_HELP = {
+    // 数学
+    'Abs(': ['絶対値（マイナスを取る）', 'Abs(数)\n例：Abs(-3.5) → 3.5\n使いどころ：ずれの大きさだけを出すとき（Abs(N)）'],
+    'Int(': ['整数部分（0 の方へ切り捨て）', 'Int(数)\n例：Int(2.7) → 2、Int(-2.7) → -2'],
+    'Intg(': ['その数を超えない最大の整数', 'Intg(数)\n例：Intg(2.7) → 2、Intg(-2.7) → -3（Int と負の数で違う）'],
+    'Frac(': ['小数部分', 'Frac(数)\n例：Frac(12.345) → 0.345'],
+    'Rnd(': ['表示の桁（Fix・Sci）で丸めた値', 'Rnd(数)\n例：Fix 3 のとき Rnd(1.23456) → 1.235\n使いどころ：画面と同じ値で次の計算をしたいとき'],
+    'x⁻¹': ['逆数（1÷x）', '数⁻¹\n例：4⁻¹ → 0.25'],
+    'x!': ['階乗', '整数!\n例：5! → 120'],
+    'x³': ['3 乗', '数³\n例：2³ → 8'],
+    '∛(': ['立方根', '∛(数)\n例：∛(27) → 3'],
+    'ˣ√(': ['x 乗根', 'x ˣ√(数)\n例：4ˣ√(81) → 3'],
+    'nPr': ['順列（n 個から r 個を並べる数）', 'nℙr\n例：5ℙ2 → 20'],
+    'nCr': ['組合せ（n 個から r 個を選ぶ数）', 'nℂr\n例：5ℂ2 → 10'],
+    'Ran#': ['0 以上 1 未満の乱数', 'Ran#\n例：Ran# → 0.734 など（毎回変わる）'],
+    'RanInt#(': ['整数の乱数', 'RanInt#(最小,最大)\n例：RanInt#(1,6) → 1〜6 のどれか'],
+    'Pol(': ['直交座標 → 距離と角度（I・J に入る）', 'Pol(X の差,Y の差)\nI＝距離、J＝方向角（−180〜180°）\n例：Pol(3,4) → I＝5、J＝53.13…\n測量：Pol(X2-X1,Y2-Y1) で 2 点間の距離と方向角\n注意：I と J は書き換わる'],
+    'Rec(': ['距離と角度 → 直交座標（I・J に入る）', 'Rec(距離,角度)\nI＝X の差、J＝Y の差\n例：Rec(10,45) → I＝7.071、J＝7.071\n測量：Rec(L,H+J) で観測から座標の差\n注意：I と J は書き換わる'],
+    'GCD(': ['最大公約数', 'GCD(整数,整数)\n例：GCD(12,18) → 6'],
+    'LCM(': ['最小公倍数', 'LCM(整数,整数)\n例：LCM(4,6) → 12'],
+    '%': ['百分率（÷100）', '数%\n例：200×5% → 10'],
+    'π': ['円周率', 'π ＝ 3.14159…\n例：2πR で円周、R×IA×π÷180 で曲線長'],
+    'e': ['自然対数の底', 'e ＝ 2.71828…'],
+    'sinh(': ['双曲線正弦', 'sinh(数)'], 'cosh(': ['双曲線余弦', 'cosh(数)'], 'tanh(': ['双曲線正接', 'tanh(数)'],
+    'sinh⁻¹(': ['sinh の逆関数', 'sinh⁻¹(数)'], 'cosh⁻¹(': ['cosh の逆関数', 'cosh⁻¹(数)'], 'tanh⁻¹(': ['tanh の逆関数', 'tanh⁻¹(数)'],
+    'log(a,b)': ['a を底とする b の対数', 'log(底,数)\n例：log(2,8) → 3'],
+    // 命令
+    '?': ['値を入れてもらう（入力）', '"表示"?→変数\n例："KYORI"?→L（KYORI? と出て、打った値が L に入る）\n"BX"?A のように → を付けないと、今の値が出ていて EXE だけで前のままにできる'],
+    '→': ['値を変数に入れる（代入）', '式→変数\n例：A+B→C、0→Z[1]'],
+    '◢': ['答えを表示して止まる（EXE で続く）', '式◢\n例："X=":X◢（X= と値を出して止まる）'],
+    ':': ['文の区切り（1 行に何文も書ける）', '文:文\n例：1→A:2→B'],
+    '"': ['文字を表示する（文字列）', '"文字"\n例："MIGI"（MIGI と表示）、"HA":K◢'],
+    '⇒': ['条件が成り立つときだけ次の 1 文をする', '条件⇒文\n例：K=0⇒Prog "SUB2"（K が 0 なら SUB2 を呼ぶ）'],
+    '=': ['等しい（比べる）', '例：If A=0:Then …'], '≠': ['等しくない', '例：A≠0⇒…'],
+    '>': ['より大きい', '例：If N>0:Then "MIGI"'], '≥': ['以上', '例：If T≥0:Then …'],
+    '<': ['より小さい', '例：If N<0:Then "HIDARI"'], '≤': ['以下', '例：T≤L⇒…'],
+    'If': ['もし…なら（If・Then・Else・IfEnd）', 'If 条件:Then 成り立つとき:Else 成り立たないとき:IfEnd\n例：If N<0:Then "HIDARI":Else "MIGI":IfEnd'],
+    'Then': ['If が成り立つときにすること', 'If の説明を見てください'], 'Else': ['If が成り立たないときにすること', 'If の説明を見てください'], 'IfEnd': ['If の終わり', 'If の説明を見てください'],
+    'For →I To': ['回数を決めて繰り返す（For・To・Step・Next）', 'For 始め→変数 To 終わり Step 増やし方 … Next\n例：For 1→K To N … Next（K を 1 から N まで）\nStep を省くと 1 ずつ'],
+    'To': ['For の終わりの値', 'For の説明を見てください'], 'Step': ['For の増やし方', '例：For 0→I To 10 Step 2'], 'Next': ['For の繰り返しの終わり', 'For の説明を見てください'],
+    'While': ['条件の間くり返す（初めに調べる）', 'While 条件 … WhileEnd\n例：While A<10:A+1→A:WhileEnd'], 'WhileEnd': ['While の終わり', 'While の説明を見てください'],
+    'Do': ['くり返す（終わりで調べる）', 'Do … LpWhile 条件\n例：Do:"A"?→A:LpWhile A<0（0 以上が入るまで聞き直す）'], 'LpWhile': ['Do の終わり（条件の間もどる）', 'Do の説明を見てください'],
+    'Lbl': ['飛び先の目印（0〜9・A〜Z）', 'Lbl 1 … Goto 1\n例：Lbl 1:"PX"?→X:…:Goto 1（測点を何度も入れる）'], 'Goto': ['Lbl へ飛ぶ', 'Lbl の説明を見てください'],
+    'Prog "': ['ほかのプログラム（SUB）を呼ぶ', 'Prog "名前"\n例：Prog "SUB1"（SUB1 を動かして、終わったら戻る）\n同じ計算を SUB にまとめると、バイト数を節約できる'],
+    'Return': ['SUB から呼んだ元へ戻る', 'SUB の途中で戻りたいときに使う'], 'Stop': ['プログラムを終わる', '例：If Q>9:Then "ERR":Stop:IfEnd'], 'Break': ['For・While・Do のくり返しをぬける', '例：If A=0:Then Break:IfEnd'],
+    'Isz': ['変数を 1 増やし、0 になったら次の文をとばす', 'Isz 変数\n例：Isz A:Goto 1'], 'Dsz': ['変数を 1 減らし、0 になったら次の文をとばす', 'Dsz 変数\n例：Dsz N:Goto 1（N 回くり返す）'],
+    'Locate': ['画面の決まった場所に表示', 'Locate 桁,行,値\n桁 1〜16、行 1〜4\n例：Locate 1,1,"X=":Locate 4,1,X'],
+    'Cls': ['画面を消す', 'Cls'], 'Getkey': ['押しているキーの番号', 'Getkey → キーの番号（押していなければ 0）\n例：Do:LpWhile Getkey=0（キーを押すまで待つ）'],
+    'And': ['かつ（両方成り立つ）', '例：If T≥0 And T≤L:Then …'], 'Or': ['または', '例：If A<0 Or A>9:Then …'], 'Xor': ['どちらか一方だけ', '例：A Xor B'], 'Not(': ['成り立たない', '例：Not(A=0)'],
+    'Z[': ['拡張変数（Z の先の変数）', 'Z[番号]\n先に DimZ で数を決める。例：20→DimZ:5→Z[1]\n座標や線形のように数の多い値をしまうのに使う'], ']': ['Z[ の閉じかっこ', 'Z[ の説明を見てください'],
+    'DimZ': ['拡張変数 Z[ ] の数を決める', '数→DimZ\n例：50→DimZ（Z[1]〜Z[50] が使える）\nDimZ だけを書くと今の数'],
+    'ClrMemory': ['変数を全部 0 にする', 'ClrMemory\n注意：ほかのプログラムが使っている値も消える'],
+    // 角度
+    '°': ['度分秒で入れる', '度°分°秒°\n例：45°30°15°（45 度 30 分 15 秒）'],
+    '▸DMS': ['答えを度分秒で表示', '値▸DMS\n例：45.5041▸DMS → 45°30′15″'],
+    'Deg': ['角度の単位を度にする', 'Deg（プログラムの初めに書くとよい）'], 'Rad': ['角度の単位をラジアンにする', 'Rad'], 'Gra': ['角度の単位をグラードにする', 'Gra'],
+    // 表示
+    'Fix': ['小数点以下の桁数を決める', 'Fix 桁\n例：Fix 3（1.235 のように 3 桁）'],
+    'Sci': ['有効数字の桁数を決める', 'Sci 桁\n例：Sci 4（1.235×10² のように）'],
+    'Norm': ['ふつうの表示に戻す', 'Norm 1 か Norm 2\nNorm 2 は小さい数も小数で出す']
+  };
   function openFunction() {
     const ins = s => { mode = menuBackMode; insertText(s); };
     const menuBackMode = mode === 'menu' ? 'comp' : mode;
     const back = () => { mode = menuBackMode; };
     openMenu('FUNCTION', FN_GROUPS.map(([g, list]) => ({
-      label: g, act: () => openMenu(g, list.map(x => { const [lab, val] = x.includes('|') ? x.split('|') : [x, x]; return { label: lab.trim() || lab, act: () => ins(val) }; }), { back: () => openFunction() })
+      label: g, act: () => openMenu(g, list.map(x => {
+        const [lab, val] = x.includes('|') ? x.split('|') : [x, x];
+        const name = lab.trim() || lab, h = FN_HELP[name] || [];
+        return { label: name, desc: h[0], help: h[1] ? name + '\n' + h[0] + '\n\n' + h[1] : '', act: () => ins(val) };
+      }), { back: () => openFunction() })
     })), { back });
   }
+  // 説明を見る画面（メニューの上に出す。EXE・EXIT・戻るで閉じる）
+  function openHelpView(title, text) { menu.view = { title, text }; }
   // 入力中の場所へ文字を入れる（COMP・代入画面・名前・エディタ・プログラム入力）
   function insertText(s) {
     if (mode === 'comp') return compInsert(s);
@@ -719,6 +800,8 @@
     const title = { RUN: 'Prog List 実行', EDIT: 'Prog Edit 編集', DELETE: 'Delete 削除', EXPORT: 'Export 書出', CCL: 'CCL 電卓用（.ccl）' }[kind];
     const items = list.map(p => ({
       label: p.name + (p.mode === 'Formula' ? ' ·FM' : ''), key: p.name,
+      // プログラムの中の '説明 と '解説 の行（アプリだけが読む）
+      ...(md => ({ desc: md.summary || p.title || '', help: md.help ? p.name + (md.summary ? '\n' + md.summary : '') + '\n\n' + md.help : '' }))(B.meta(p.source)),
       act: () => {
         if (kind === 'RUN') { if (p.mode === 'Formula') startFmla(userFormula(p)); else startRun(p, 'list'); }
         else if (kind === 'EDIT') { if (bigScreen()) openPcEditor('p=' + encodeURIComponent(p.name)); else openEditor(p); }
@@ -1228,6 +1311,8 @@
     const t = ln.dataset.tap;
     if (mode === 'menu') {
       if (t === 'back') { menuKey({ id: 'EXIT' }); }
+      else if (t === 'desc') { S.showDesc = S.showDesc === false; save(); }
+      else if (t[0] === 'h') { const it = menu.items[Number(t.slice(1))]; if (it && it.help) { menu.sel = Number(t.slice(1)); openHelpView(it.label, it.help); } }
       else { const i = Number(t); if (menu.items[i]) { menu.sel = i; menu.items[i].act(); } }
     }
     else if (mode === 'calc' || mode === 'solve') { const st = mode === 'calc' ? calc : solve; if (substCommit(st, mode)) st.idx = Number(t); }

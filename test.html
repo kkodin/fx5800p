@@ -362,6 +362,23 @@
   test('SENKEI・SENTEI は .ccl にしない（Z[ のコードが未確認）', false, () => CC.toCcl(CSET[0]).ok || CC.toCcl(CSET[1]).ok);
   test('.ccl：ᴇ の後の - は負の記号', '31 0f 87 37', () => hex(CC.encode('1ᴇ-7').bytes));
 
+  // ---- アプリだけが読む説明（'説明・'解説 の行） ----
+  const NOTE_SRC = "'説明 テストの説明\n'解説 1 行目\n'解説 2 行目\n' ただのメモ\n1→A\n  ' 字下げしたメモ\nA+1→A:\"X\":A◢\n'解説 3 行目";
+  test('説明：一覧に出す 1 行', 'テストの説明', () => FxBasic.meta(NOTE_SRC).summary);
+  test('解説：何行でも（メモは入らない）', '1 行目\n2 行目\n3 行目', () => FxBasic.meta(NOTE_SRC).help);
+  test('説明の行は実行しない', '2', () => {
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const g = FxBasic.run({ name: 'N', source: NOTE_SRC }, { vars, io: { print() {}, printValue() {}, locate() {}, cls() {} } });
+    let r = g.next(), n = 0; while (!r.done && n++ < 20) r = g.next();
+    return String(vars.A);
+  });
+  test('説明の行は .ccl に入らない（入れない場合と同じバイト列）', true, () => hex(CC.toCcl({ name: 'T', source: NOTE_SRC }).bytes) === hex(CC.toCcl({ name: 'T', source: FxBasic.strip(NOTE_SRC) }).bytes));
+  test('説明の行は .cce に入らない', false, () => /説明|解説|メモ/.test(FxImport.decodeCce(new TextEncoder().encode(CC.toCce({ name: 'T', source: NOTE_SRC }).text).buffer, 'T.cce').source));
+  test('.ccl のエラーの行番号は元の行', 3, () => CC.encode("'説明 x\n1→A\n\"距\"").problems[0].line);
+  test('文字列の中の \' は説明にならない', '"A\'B"', () => FxBasic.strip('"A\'B"'));
+  test('実機用の一式：全部に説明がある', '', () => SET.concat(SN.calcCurvePrograms()).filter(p => !FxBasic.meta(p.source).summary).map(p => p.name).join(','));
+  test('実機用の一式：説明を付けてもバイト数は同じ（TYOKUSEN 88）', 88, () => CC.toCcl(SET.find(p => p.name === 'TYOKUSEN')).size);
+
   // ---- 図（plot.js） ----
   const PL = FxPlot;
   const pp = [

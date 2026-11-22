@@ -1,0 +1,44 @@
+﻿■ SENTEI：線形を入れる（最初に 1 回）
+使う変数：書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z、Z[1]〜Z[11N+6]（A〜D・G・H・K は使わない）
+実機へは手で打ち込む（Z[ ] の命令コードが未確認のため .ccl なし）
+
+【解説】
+BP-X・BP-Y：BP の座標、HOUKOU：BP→IP1 の方向角、N：曲線の数、BP-IP：BP〜IP1 の距離
+曲線ごとに R（半径）、IA（交角）、MUKI（右曲線＝1、左曲線＝−1）、IP-IP（次の IP まで。最後は IP-EP＝最後の直線）
+曲線ごとに、そのあとの直線の方向角 HOUKOU を出す
+線形は Z[1]〜Z[11N+6] に覚える。KAIHOU の A〜D・G・H・K は使わない
+
+【プログラム（実機に打ち込む文）】
+Deg:Fix 3
+"BP-X"?→X:"BP-Y"?→Y
+"HOUKOU"?→W
+"N"?→N
+11N+6→DimZ
+N→Z[1]
+0→Z
+"BP-IP"?→L
+Rec(L,W):X+I→E:Y+J→F
+For 1→M To N
+"R"?→R
+"IA"?→O
+"MUKI R=1 L=-1"?→T
+O×T→O
+R×tan(Abs(O)÷2)→T
+Rec(T,W):E-I→P:F-J→Q
+5M-3→S
+X→Z[S]:Y→Z[S+1]:W→Z[S+2]
+Pol(P-X,Q-Y):I→Z[S+3]:Z→Z[S+4]
+Z+I→Z
+O÷Abs(O)→U
+5N+6M+1→S
+Rec(R,W+90U):P+I→Z[S]:Q+J→Z[S+1]
+R→Z[S+2]:O→Z[S+3]:W+90U+180→Z[S+4]:Z→Z[S+5]
+Z+R×Abs(O)×π÷180→Z
+W+O→W
+Rec(T,W):E+I→X:F+J→Y
+"HOUKOU":W▸DMS◢
+If M<N:Then "IP-IP"?→L:Rec(L,W):E+I→E:F+J→F:Else "IP-EP"?→L:IfEnd
+Next
+5N+2→S
+X→Z[S]:Y→Z[S+1]:W→Z[S+2]:L-T→Z[S+3]:Z→Z[S+4]
+"EP KYORI":Z+L-T◢

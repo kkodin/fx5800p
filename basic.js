@@ -12,6 +12,10 @@
     const push = () => { const s = buf.trim(); if (s) out.push({ text: s, line: start }); buf = ''; start = line; };
     for (let i = 0; i < src.length; i++) {
       const c = src[i];
+      // 行の先頭が ' の行は、アプリだけが読む説明・メモ（実行しない。電卓へも送らない）
+      if (c === "'" && !q && !buf.trim() && (i === 0 || /\n\s*$/.test(src.slice(Math.max(0, i - 40), i)) || /^\s*$/.test(src.slice(0, i)))) {
+        const e = src.indexOf('\n', i); i = (e < 0 ? src.length : e) - 1; continue;
+      }
       if (c === '"') { q = !q; buf += c; continue; }
       if (c === '\n') { if (q) q = false; push(); line++; start = line; continue; }
       if (!q && (c === ':' || c === '：')) { push(); continue; }
@@ -278,7 +282,30 @@
   // 文法チェックだけ行う
   function check(source) { compile(source, true); return true; }
 
-  const api = { compile, run, check, split };
+  // ---- アプリだけが読む説明（行の先頭が ' の行） ----
+  //   '説明 … → 内容説明（一覧に出す 1 行）
+  //   '解説 … → 解説（何行でも。「？」で開く）
+  //   ' …     → メモ（どこにも出さない）
+  const isNote = l => /^\s*'/.test(l);
+  function meta(source) {
+    const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+    let summary = '';
+    const help = [];
+    for (const l of lines) {
+      if (!isNote(l)) continue;
+      const t = l.replace(/^\s*'/, '');
+      let m;
+      if ((m = t.match(/^\s*説明\s*[:：]?\s*(.*)$/))) { if (!summary) summary = m[1].trim(); else help.push(m[1]); }
+      else if ((m = t.match(/^\s*解説\s*[:：]?\s?(.*)$/))) help.push(m[1]);
+    }
+    return { summary, help: help.join('\n').replace(/\s+$/, '') };
+  }
+  // 電卓（実機）へ送るときは ' の行を消す
+  function strip(source) {
+    return String(source || '').replace(/\r\n?/g, '\n').split('\n').filter(l => !isNote(l)).join('\n');
+  }
+
+  const api = { compile, run, check, split, meta, strip };
   root.FxBasic = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -48,14 +48,18 @@
   // プログラムの文字 → 命令コードのバイト列（終わりの 0x00 は付けない）
   function encode(source) {
     const T = table || build();
-    const src = String(source || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+    // 行の先頭が ' の行（アプリだけの説明・メモ）は電卓へ送らない。エラーの行番号は元の行で出す
+    const all = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+    const kept = [], lineNo = [];
+    all.forEach((t, k) => { if (!/^\s*'/.test(t)) { kept.push(t); lineNo.push(k + 1); } });
+    const src = kept.join('\n').replace(/\n+$/, '');
     const out = [], problems = [];
-    let q = false, i = 0, line = 1;
+    let q = false, i = 0, li = 0, line = lineNo[0] || 1;
     const prev = () => out.length ? out[out.length - 1] : null;
     const bad = (msg) => { if (problems.length < 50) problems.push({ level: 'error', line, msg }); };
     while (i < src.length) {
       const ch = src[i];
-      if (ch === '\n') { out.push(0x0D); i++; line++; continue; }
+      if (ch === '\n') { out.push(0x0D); i++; li++; line = lineNo[li] || line + 1; continue; }
       if (ch === '"') { out.push(0x22); q = !q; i++; continue; }
       if (q) {
         const sym = QUOTE_SYM[ch];
@@ -160,6 +164,7 @@
   //   Shift_JIS にある文字は \'xx、ない記号（◢ など）は \uNNNN? で書く
   function toCce(prog) {
     const problems = encode(prog.source).problems;
+    prog = Object.assign({}, prog, { source: String(prog.source || '').replace(/\r\n?/g, '\n').split('\n').filter(l => !/^\s*'/.test(l)).join('\n') });
     const sj = root.FxPoints && root.FxPoints.encodeSjis;
     let body = '';
     for (const ch of String(prog.source || '').replace(/\r\n?/g, '\n')) {

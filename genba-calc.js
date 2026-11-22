@@ -404,7 +404,9 @@
     const total = res.reduce((s, x) => s + x.r.size, 0);
     const rows = res.map(x => '<tr><td><b>' + esc(x.p.name) + '</b></td><td>' + esc(x.p.title) + '</td><td class="n">' + x.r.size + '</td><td class="small">' + esc(x.p.uses) + '</td></tr>').join('')
       + curve.map(p => '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.title) + '<br><span class="small warn">実機には手で打ち込む（Z[ ] を使うため .ccl はまだ作れない）</span></td><td class="n">―</td><td class="small">' + esc(p.uses) + '</td></tr>').join('');
-    const pre = h('pre', { class: 'prog-src', text: set.concat(curve).map(p => '■ ' + p.name + '（' + p.title + '）\n' + p.source).join('\n\n') });
+    // 実機に打ち込む文には、アプリだけの '説明・'解説 の行を入れない
+    const body = p => String(p.source).split('\n').filter(l => !/^\s*'/.test(l)).join('\n');
+    const pre = h('pre', { class: 'prog-src', text: set.concat(curve).map(p => '■ ' + p.name + '（' + p.title + '）\n' + body(p)).join('\n\n') });
     D.open({
       title: '電卓（実機）用の測設プログラム', width: 680,
       body: h('div', { class: 'prog-box' }, [
@@ -448,7 +450,7 @@
         { label: '.ccl をまとめて書き出す（zip）', kind: 'primary', onClick: async () => {
           const ng = res.filter(x => !x.r.ok);
           if (ng.length) { toast('書き出せません：' + ng.map(x => x.p.name + ' ' + x.r.problems.map(q => q.msg).join('／')).join('、')); return false; }
-          const txt = list => '﻿' + list.map(p => p.name + '：' + p.title + '\r\n使う変数：' + p.uses + '\r\n' + p.source.replace(/\n/g, '\r\n')).join('\r\n\r\n');
+          const txt = list => '﻿' + list.map(p => p.name + '：' + p.title + '\r\n使う変数：' + p.uses + '\r\n' + body(p).replace(/\n/g, '\r\n')).join('\r\n\r\n');
           const zip = FxZip.make(res.map(x => ({ name: x.r.fileName, data: x.r.bytes })).concat([
             { name: 'NINI一式の説明.txt', data: txt(set) },
             { name: '手入力用_SENTEI_SENKEI.txt', data: '﻿実機には、この文を見ながら手で打ち込んでください（Z[ ] を使うため .ccl はまだ作れません）。\r\n「ᴇ」は ×10x キー、「≤」「≥」は比較の記号、「▸DMS」は °′″ の SHIFT です。\r\n\r\n' + txt(curve).slice(1) }]));

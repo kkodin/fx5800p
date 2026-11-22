@@ -84,6 +84,8 @@
   //     直線 j（0〜N）：Z[5j+2]〜Z[5j+6] ＝ 始点 X・Y、方向角、長さ、BP からの距離
   //     曲線 i（1〜N）：Z[5N+6i+1]〜Z[5N+6i+6] ＝ 中心 X・Y、半径、交角（右＋・左−）、中心から BC への方向角、BC の BP からの距離
   function calcCurvePrograms() {
+  // プログラムの頭に、アプリだけが読む '説明・'解説 の行を付ける（電卓へ送るときは消える）
+  const withNotes = (summary, help, src) => ["'説明 " + summary].concat(help.map(l => "'解説 " + l), [src]).join('\n');
     const sentei = [
       'Deg:Fix 3',
       '"BP-X"?→X:"BP-Y"?→Y',
@@ -151,8 +153,8 @@
       'Fix 3'
     ].join('\n');
     return [
-      { name: 'SENTEI', mode: 'COMP', source: sentei, title: '線形を入れる（曲線の数・BP〜IP・R・交角・向き・IP 間・最後の直線）', uses: '書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z、Z[1]〜Z[11N+6]（A〜D・G・H・K は使わない）' },
-      { name: 'SENKEI', mode: 'COMP', source: senkei, title: '測った点（-FX-・-FY-）を線形と照合し、区間・BP からの距離・右／左 mm を出す', uses: '読む X・Y（KAIHOU の答え）・Z[ ]／書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・W（A〜D・G・H・K は使わない）' }
+      { name: 'SENTEI', mode: 'COMP', source: withNotes('線形を入れる（最初に 1 回）', ['BP-X・BP-Y：BP の座標、HOUKOU：BP→IP1 の方向角、N：曲線の数、BP-IP：BP〜IP1 の距離', '曲線ごとに R（半径）、IA（交角）、MUKI（右曲線＝1、左曲線＝−1）、IP-IP（次の IP まで。最後は IP-EP＝最後の直線）', '曲線ごとに、そのあとの直線の方向角 HOUKOU を出す', '線形は Z[1]〜Z[11N+6] に覚える。KAIHOU の A〜D・G・H・K は使わない'], sentei), title: '線形を入れる（曲線の数・BP〜IP・R・交角・向き・IP 間・最後の直線）', uses: '書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・V・W・X・Y・Z、Z[1]〜Z[11N+6]（A〜D・G・H・K は使わない）' },
+      { name: 'SENKEI', mode: 'COMP', source: withNotes('測った点を線形と照合（区間・BP からの距離・右／左 mm）', ['先に SENTEI で線形を入れておく', '-FX-・-FY-：KAIHOU で出た点。EXE だけでそのまま使う', 'TYOKUSEN（第何直線）か KYOKUSEN（第何曲線）、KYORI（BP からの距離）、MIGI／HIDARI（mm）を出す', 'どの区間の範囲にも入らないときは SOTO(HANI-GAI)', 'KAIHOU の A〜D・G・H・K は使わないので、KAIHOU → SENKEI → KAIHOU と続けて使える'], senkei), title: '測った点（-FX-・-FY-）を線形と照合し、区間・BP からの距離・右／左 mm を出す', uses: '読む X・Y（KAIHOU の答え）・Z[ ]／書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・W（A〜D・G・H・K は使わない）' }
     ];
   }
 

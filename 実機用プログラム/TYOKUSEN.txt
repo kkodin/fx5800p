@@ -1,0 +1,19 @@
+﻿■ TYOKUSEN：直線の右・左のずれ（KAIHOU の X・Y を使う）
+使う変数：読む X・Y／書く T・S・M・N・I・J（KAIHOU の A〜D・G・H・K は使わない）
+大きさ：88 バイト
+
+【解説】
+IP-X・IP-Y：今いる直線の起点（IP）の座標
+X・Y：KAIHOU で出た点。EXE だけでそのまま使う
+IA：その直線の方向角（°′″ キーで）
+答え：MIGI（右）か HIDARI（左）と、ずれ（m）
+直した版：点が IP より西にあっても正しく出る。KAIHOU の角度 H を書き換えない
+
+【プログラム（実機に打ち込む文）】
+"IP-X"?T:"IP-Y"?S:?X:?Y
+Pol(X-T,Y-S)
+"IA"?M
+sin(J-M)×I→N
+If N<0:Then "HIDARI":Abs(N)
+Else "MIGI":Abs(N)
+IfEnd

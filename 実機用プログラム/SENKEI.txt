@@ -1,0 +1,41 @@
+﻿■ SENKEI：測った点を線形と照合（区間・BP からの距離・右／左 mm）
+使う変数：読む X・Y（KAIHOU の答え）・Z[ ]／書く E・F・I・J・L・M・N・O・P・Q・R・S・T・U・W（A〜D・G・H・K は使わない）
+実機へは手で打ち込む（Z[ ] の命令コードが未確認のため .ccl なし）
+
+【解説】
+先に SENTEI で線形を入れておく
+-FX-・-FY-：KAIHOU で出た点。EXE だけでそのまま使う
+TYOKUSEN（第何直線）か KYOKUSEN（第何曲線）、KYORI（BP からの距離）、MIGI／HIDARI（mm）を出す
+どの区間の範囲にも入らないときは SOTO(HANI-GAI)
+KAIHOU の A〜D・G・H・K は使わないので、KAIHOU → SENKEI → KAIHOU と続けて使える
+
+【プログラム（実機に打ち込む文）】
+Deg:Fix 3
+"-FX-"?X:"-FY-"?Y
+Z[1]→N
+1ᴇ99→Q
+For 1→M To N
+5N+6M+1→S
+Pol(X-Z[S],Y-Z[S+1])
+Z[S+3]÷Abs(Z[S+3])→U
+(J-Z[S+4])×U→T
+T-360Int(T÷360)→T
+If T<0:Then T+360→T:IfEnd
+U×(Z[S+2]-I)→R
+8→W:If T≤Abs(Z[S+3])+1ᴇ-7:Then 0→W:IfEnd
+If 1000W+Abs(R)<Q:Then 1000W+Abs(R)→Q:R→O:Z[S+5]+Z[S+2]×T×π÷180→L:-M→P:IfEnd
+Next
+For 0→M To N
+5M+2→S
+X-Z[S]→E:Y-Z[S+1]→F
+E×cos(Z[S+2])+F×sin(Z[S+2])→T
+F×cos(Z[S+2])-E×sin(Z[S+2])→R
+9→W:If T≥0 And T≤Z[S+3]:Then 1→W:IfEnd
+If 1000W+Abs(R)<Q:Then 1000W+Abs(R)→Q:R→O:Z[S+4]+T→L:M+1→P:IfEnd
+Next
+If Q≥8000:Then "SOTO(HANI-GAI)"◢IfEnd
+If P>0:Then "TYOKUSEN":P◢Else "KYOKUSEN":Abs(P)◢IfEnd
+"KYORI":L◢
+Fix 1
+If O<0:Then "HIDARI(MM)":Abs(O)×1000◢Else "MIGI(MM)":O×1000◢IfEnd
+Fix 3

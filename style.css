@@ -142,6 +142,16 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .mi.sel { background: var(--ink); color: var(--lcd); border-color: var(--ink); }
 .mi.sel .no { background: var(--lcd); color: var(--ink); }
 .menu-list .empty { padding: 20px; text-align: center; opacity: .7; }
+/* 説明つきの一覧（'説明 の行・FUNCTION の説明） */
+.mrow { display: contents; }
+.mrow.desc { display: flex; gap: 4px; align-items: stretch; }
+.mrow.desc .mi { flex: 1; min-width: 0; }
+.mi .lbw { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.mi .ds { font: 400 12.5px/1.35 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; opacity: .85; white-space: normal; overflow-wrap: anywhere; }
+.mhelp { flex: 0 0 44px; border: 1px solid #0003; border-radius: 7px; background: #ffffff38; color: var(--ink); font: 700 18px system-ui, sans-serif; }
+.mdesc { border: 1px solid #0004; border-radius: 6px; background: transparent; color: var(--ink); font: 600 12px system-ui, "Hiragino Sans", sans-serif; padding: 3px 8px; }
+.mdesc.on { background: var(--ink); color: var(--lcd); }
+.menu-help { flex: 1; overflow: auto; padding: 8px 2px; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; overscroll-behavior: contain; }
 
 /* 液晶上の表示（D・Fix など）はタップで選べる */
 .ind .tapind { cursor: pointer; padding: 0 .35em; border-radius: 3px; }

@@ -30,11 +30,15 @@
   // ---- 一覧 ----
   function renderList() {
     const q = $('search').value.trim().toUpperCase();
-    const list = programs.slice().sort((a, b) => a.name.localeCompare(b.name, 'en')).filter(p => !q || p.name.toUpperCase().includes(q));
+    const sum = p => B.meta(p.source).summary || p.title || '';
+    const list = programs.slice().sort((a, b) => a.name.localeCompare(b.name, 'en')).filter(p => !q || p.name.toUpperCase().includes(q) || sum(p).toUpperCase().includes(q));
     $('list').innerHTML = '';
     for (const p of list) {
       const li = document.createElement('li');
       li.textContent = p.name;
+      // '説明 の行があれば、名前の下に出す
+      const s0 = sum(p);
+      if (s0) { const d = document.createElement('span'); d.className = 'sum'; d.textContent = s0; li.append(d); li.title = s0; }
       if (p.mode === 'Formula') { const s = document.createElement('span'); s.className = 'fm'; s.textContent = 'FM'; li.append(s); }
       if (p.mode !== 'Formula') { try { B.check(p.source); } catch { const s = document.createElement('span'); s.className = 'ng'; s.textContent = '⚠'; s.title = '文法エラーあり'; li.append(s); } }
       if (cur && cur.p === p) li.className = 'on';
@@ -61,6 +65,11 @@
   const FN = /^(sinh⁻¹\(|cosh⁻¹\(|tanh⁻¹\(|sin⁻¹\(|cos⁻¹\(|tan⁻¹\(|sinh\(|cosh\(|tanh\(|sin\(|cos\(|tan\(|log\(|ln\(|√\(|∛\(|Abs\(|Int\(|Intg\(|Frac\(|Rnd\(|Pol\(|Rec\(|RanInt#\(|Ran#|GCD\(|LCM\(|Not\(|Neg\(|e\^\(|10\^\(|ˣ√\(|▸DMS|Ans)/;
   const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   function highlightLine(line) {
+    // 行の先頭が ' の行：アプリだけが読む説明（'説明・'解説）・メモ。電卓へは送らない
+    if (/^\s*'/.test(line)) {
+      const k = /^\s*'\s*(説明|解説)/.exec(line);
+      return '<span class="t-note' + (k ? ' t-note-' + (k[1] === '説明' ? 'sum' : 'help') : '') + '">' + esc(line) + '</span>';
+    }
     let out = '', i = 0;
     while (i < line.length) {
       const rest = line.slice(i);
@@ -485,6 +494,8 @@
   function setFont(n, quiet) {
     fontSize = Math.min(FS_MAX, Math.max(FS_MIN, Math.round(n)));
     document.documentElement.style.setProperty('--code-size', fontSize + 'px');
+    // 左右の窓（一覧・命令・関数・ショートカット）も同じ割合で大きくする
+    document.documentElement.style.setProperty('--ui-zoom', String(fontSize / FS_DEF));
     charW = 0; hideAC(); syncScroll();
     $('fsz').textContent = '文字 ' + fontSize + 'px';
     try { localStorage.setItem(KEY + '-editor-font', String(fontSize)); } catch { /* 無視 */ }
@@ -508,5 +519,65 @@
     }, true);
     $('fsz').addEventListener('click', () => setFont(FS_DEF));
   }
-  window.addEventListener('DOMContentLoaded', () => { bindFont(); init(); });
+  // ---- 左右の窓：表示・非表示、切り離し（フォームの共通ルールに合わせる） ----
+  //   1. タイトル帯をつかんで動かす（マウス・指）。画面の外へ出切らない
+  //   2. ボタン（戻す・隠す）はタイトル帯の右
+  //   4. 窓の中のスクロールは後ろへ伝えない（overscroll-behavior）
+  const PANEL_KEY = KEY + '-editor-panels';
+  let panels = { side: { show: true, float: false }, pal: { show: true, float: false } };
+  function savePanels() { try { localStorage.setItem(PANEL_KEY, JSON.stringify(panels)); } catch { /* 無視 */ } }
+  function applyPanel(name) {
+    const el = document.querySelector('[data-panel="' + name + '"]'), st = panels[name];
+    el.classList.toggle('hidden', !st.show);
+    el.classList.toggle('floating', !!st.float);
+    if (st.float) {
+      const w = st.w || Math.round((name === 'side' ? 260 : 330) * fontSize / FS_DEF), h = st.h || Math.min(560, window.innerHeight - 120);
+      el.style.width = w + 'px'; el.style.height = h + 'px';
+      placePanel(el, st.x == null ? (name === 'side' ? 20 : window.innerWidth - w - 20) : st.x, st.y == null ? 90 : st.y);
+    } else { el.style.left = el.style.top = el.style.width = el.style.height = ''; }
+    const fb = el.querySelector('[data-pact="float"]');
+    fb.textContent = st.float ? '⇲ 戻す' : '⇱ 切り離す';
+    fb.title = st.float ? 'もとの場所（画面の' + (name === 'side' ? '左' : '右') + '）へ戻す' : 'この窓を切り離して、好きな場所へ動かす';
+    $(name === 'side' ? 'tSide' : 'tPal').classList.toggle('off', !st.show);
+  }
+  function placePanel(el, x, y) {
+    const w = el.offsetWidth || 200, KEEP = 60;
+    x = Math.min(Math.max(x, KEEP - w), window.innerWidth - KEEP);
+    y = Math.min(Math.max(y, 0), window.innerHeight - 30);
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    return { x, y };
+  }
+  function bindPanels() {
+    try { const s = JSON.parse(localStorage.getItem(PANEL_KEY) || 'null'); if (s && s.side && s.pal) panels = s; } catch { /* 無視 */ }
+    for (const name of ['side', 'pal']) {
+      const el = document.querySelector('[data-panel="' + name + '"]'), head = el.querySelector('.phead');
+      el.querySelector('[data-pact="float"]').onclick = () => { panels[name].float = !panels[name].float; applyPanel(name); savePanels(); };
+      el.querySelector('[data-pact="hide"]').onclick = () => { panels[name].show = false; applyPanel(name); savePanels(); toast((name === 'side' ? '一覧' : 'パレット') + 'を隠しました（上のボタンで戻せます）'); };
+      // タイトル帯をつかんで動かす（切り離したときだけ）
+      let drag = null;
+      head.addEventListener('pointerdown', e => {
+        if (!panels[name].float || e.target.closest('button')) return;
+        const r = el.getBoundingClientRect();
+        drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+        head.setPointerCapture(e.pointerId); head.classList.add('dragging'); e.preventDefault();
+      });
+      head.addEventListener('pointermove', e => { if (drag && e.pointerId === drag.id) placePanel(el, e.clientX - drag.dx, e.clientY - drag.dy); });
+      const end = e => {
+        if (!drag || e.pointerId !== drag.id) return;
+        drag = null; head.classList.remove('dragging');
+        panels[name].x = parseFloat(el.style.left); panels[name].y = parseFloat(el.style.top); savePanels();
+      };
+      head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+      // 右下で大きさを変えたら覚える
+      if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => {
+        if (!panels[name].float || el.classList.contains('hidden')) return;
+        panels[name].w = el.offsetWidth; panels[name].h = el.offsetHeight; savePanels();
+      }).observe(el);
+      applyPanel(name);
+    }
+    $('tSide').onclick = () => { panels.side.show = !panels.side.show; applyPanel('side'); savePanels(); };
+    $('tPal').onclick = () => { panels.pal.show = !panels.pal.show; applyPanel('pal'); savePanels(); };
+    window.addEventListener('resize', () => { for (const name of ['side', 'pal']) if (panels[name].float) { const el = document.querySelector('[data-panel="' + name + '"]'); placePanel(el, parseFloat(el.style.left), parseFloat(el.style.top)); } });
+  }
+  window.addEventListener('DOMContentLoaded', () => { bindFont(); bindPanels(); init(); });
 })();

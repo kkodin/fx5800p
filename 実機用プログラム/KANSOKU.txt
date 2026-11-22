@@ -1,0 +1,16 @@
+﻿■ KANSOKU：観測した点の座標（NINI のあと）
+使う変数：読む U・V・W／書く H・L・I・J・X・Y
+大きさ：49 バイト
+
+【解説】
+NINI で器械点を決めたあと、HA・HD を入れるたびに X・Y を出す
+SUB の OBXY を使う（一緒に送る）
+
+【プログラム（実機に打ち込む文）】
+Deg:Fix 3
+Lbl 2
+"HA"?→H:"HD"?→L
+Prog "OBXY"
+"X":X◢
+"Y":Y◢
+Goto 2

@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>プログラム エディター</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="editor.css?v=1.4.2">
-<script defer src="engine.js?v=1.4.2"></script>
-<script defer src="basic.js?v=1.4.2"></script>
-<script defer src="import.js?v=1.4.2"></script>
-<script defer src="complete.js?v=1.4.2"></script>
-<script defer src="zip.js?v=1.4.2"></script>
-<script defer src="cclwrite.js?v=1.4.2"></script>
-<script defer src="editor.js?v=1.4.2"></script>
+<link rel="stylesheet" href="editor.css?v=1.4.3">
+<script defer src="engine.js?v=1.4.3"></script>
+<script defer src="basic.js?v=1.4.3"></script>
+<script defer src="import.js?v=1.4.3"></script>
+<script defer src="complete.js?v=1.4.3"></script>
+<script defer src="zip.js?v=1.4.3"></script>
+<script defer src="cclwrite.js?v=1.4.3"></script>
+<script defer src="editor.js?v=1.4.3"></script>
 </head>
 <body>
 <header class="top">
@@ -30,13 +30,19 @@
     <span class="sep"></span>
     <label class="opt" title="-> → など、打った文字をその場で記号に変える"><input type="checkbox" id="optAuto" checked> 記号に自動変換</label>
     <button type="button" id="bKeys" title="ショートカット一覧（F1）">⌨ ショートカット</button>
+    <span class="sep"></span>
+    <button type="button" id="tSide" class="ptoggle" title="左の「プログラム一覧」を出す・隠す">◧ 一覧</button>
+    <button type="button" id="tPal" class="ptoggle" title="右の「命令・関数」を出す・隠す">◨ パレット</button>
     <a class="calc-link" href="./" target="fx5800p-calc">電卓を開く ↗</a>
     <a class="calc-link" href="genba.html" target="fx5800p-genba">現場の座標 ↗</a>
   </div>
 </header>
 
 <div class="main">
-  <aside class="side">
+  <aside class="side panel" id="sidePanel" data-panel="side">
+    <div class="phead"><b>プログラム一覧</b><span class="grow"></span>
+      <button type="button" class="pbtn" data-pact="float" title="この窓を切り離して、好きな場所へ動かす">⇱ 切り離す</button>
+      <button type="button" class="pbtn" data-pact="hide" title="この窓を隠す（上の「一覧」で戻せる）">✕</button></div>
     <div class="side-head">
       <input type="search" id="search" placeholder="プログラムを探す" aria-label="プログラムを探す">
     </div>
@@ -76,7 +82,10 @@
     </div>
   </section>
 
-  <aside class="palette" id="palette">
+  <aside class="palette panel" id="palette" data-panel="pal">
+    <div class="phead"><b>命令・関数</b><span class="grow"></span>
+      <button type="button" class="pbtn" data-pact="float" title="この窓を切り離して、好きな場所へ動かす">⇱ 切り離す</button>
+      <button type="button" class="pbtn" data-pact="hide" title="この窓を隠す（上の「パレット」で戻せる）">✕</button></div>
     <div class="pal-tabs">
       <button type="button" data-pal="cmd" class="on">命令</button>
       <button type="button" data-pal="fn">関数・記号</button>

@@ -28,8 +28,22 @@ button.danger:hover { background: #fff1f2; border-color: #f3b4b9; }
 .opt { font-size: 13px; color: #d6dbe4; display: flex; align-items: center; gap: 4px; }
 .calc-link { color: #9fc0ff; font-size: 13px; margin-left: 6px; }
 
-.main { flex: 1; display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; }
-.side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.main { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 0; }
+.side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; width: calc(230px * var(--ui-zoom, 1)); grid-column: 1; }
+.center { grid-column: 2; }
+.palette { width: calc(300px * var(--ui-zoom, 1)); grid-column: 3; }
+/* 左右の窓の中身は、エディターの文字の大きさ（Ctrl＋ホイール）と同じ割合で大きくする。タイトル帯はそのまま */
+.panel > *:not(.phead) { zoom: var(--ui-zoom, 1); }
+.panel.hidden { display: none; }
+.phead { display: flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; background: #eef1f6; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); user-select: none; -webkit-user-select: none; }
+.phead b { font-weight: 600; }
+.pbtn { padding: 1px 7px; font-size: 12px; line-height: 1.6; }
+/* 切り離した窓：タイトル帯をつかんで動かす、右下で大きさを変える */
+.panel.floating { position: fixed; z-index: 20; width: auto; border: 1px solid #9aa3b5; border-radius: 8px; box-shadow: 0 10px 30px #1f243055; resize: both; overflow: hidden; min-width: 180px; min-height: 160px; max-width: 95vw; max-height: 92vh; }
+.panel.floating .phead { cursor: move; background: #dfe6f3; color: var(--ink); touch-action: none; }
+.panel.floating .phead.dragging { cursor: grabbing; }
+.panel .list, .panel .pal-body { overscroll-behavior: contain; }
+.tools .ptoggle.off { opacity: .55; text-decoration: line-through; }
 .side-head { padding: 10px; border-bottom: 1px solid var(--line); }
 .side-head input { width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .newbox { padding: 10px; border-bottom: 1px solid var(--line); background: var(--accent-soft); }
@@ -41,6 +55,8 @@ button.danger:hover { background: #fff1f2; border-color: #f3b4b9; }
 .list li { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; font: 600 13.5px var(--mono); border-left: 3px solid transparent; }
 .list li:hover { background: #f3f5f9; }
 .list li.on { background: var(--accent-soft); border-left-color: var(--accent); }
+.list li { flex-wrap: wrap; }
+.list li .sum { flex-basis: 100%; font: 400 12px/1.35 "Segoe UI", "Yu Gothic UI", sans-serif; color: var(--muted); white-space: normal; }
 .list li .fm { font: 11px system-ui; color: #fff; background: #8b2fc9; border-radius: 4px; padding: 0 5px; }
 .list li .ng { color: var(--danger); font-size: 12px; margin-left: auto; }
 .side-foot { padding: 6px 12px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
@@ -71,6 +87,9 @@ button.danger:hover { background: #fff1f2; border-color: #f3b4b9; }
 .t-op { color: var(--c-op); font-weight: 700; }
 .t-num { color: var(--c-num); }
 .t-sep { color: #9ca3af; }
+.t-note { color: #6b7280; font-style: italic; }
+.t-note-sum { color: #0f766e; font-style: normal; font-weight: 700; }
+.t-note-help { color: #1d4ed8; font-style: normal; }
 
 .status { display: flex; gap: 16px; align-items: center; padding: 4px 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .status .msg { color: var(--ink); }
@@ -78,6 +97,8 @@ button.danger:hover { background: #fff1f2; border-color: #f3b4b9; }
 .status .msg.ng { color: var(--danger); font-weight: 600; cursor: pointer; }
 
 .palette { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.panel > .side-head, .panel > .pal-tabs, .panel > .side-foot, .panel > .newbox { flex: 0 0 auto; }
+.panel > .list, .panel > .pal-body { flex: 1 1 0; min-height: 0; }
 .pal-tabs { display: flex; border-bottom: 1px solid var(--line); }
 .pal-tabs button { flex: 1; border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; padding: 9px 0; }
 .pal-tabs button.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
