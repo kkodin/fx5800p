@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.8';
+  const VERSION = '1.4.9';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -1591,6 +1591,15 @@
     $('kbd').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('kbd').blur(); press('EXE'); } else if (e.key === 'Backspace') { e.preventDefault(); press('DEL'); } });
     $('helpBtn').addEventListener('click', () => { $('help').open = true; $('help').scrollIntoView({ behavior: 'smooth' }); });
     $('ver').textContent = 'v' + VERSION;
+    // 「実機用プログラム」の説明の .txt ごと取り込まれたプログラム（先頭が「■ NINI：…」）は、開いたときに本文だけに直す
+    if (window.FxProgInfo) {
+      const fixed = [];
+      for (const p of S.programs) {
+        if (FxProgInfo.fromGuide(p.source) === null) continue;
+        p.source = FxProgInfo.tidy(p.name, p.source); fixed.push(p.name);
+      }
+      if (fixed.length) { save(); setTimeout(() => toast(fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました', 8000), 300); }
+    }
     physicalKeys();
     // 配置（▦ 配置）：縦横・ブロックの位置と大きさ・文字の大きさ。保存は S.layout
     FxLayout.init({
