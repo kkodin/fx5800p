@@ -347,6 +347,11 @@
         const dec = await FxImport.decodeFile(f);
         const item = dec ? Object.assign({ name: dec.name, mode: dec.mode, source: dec.source }, dec.tail ? { tail: dec.tail } : {})
           : { name: f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim(), mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, '') };
+        // 「実機用プログラム」フォルダの読み物は飛ばし、説明の .txt は本文だけにする（元と同じなら日本語の名前などを付ける）
+        if (!dec && window.FxProgInfo) {
+          if (FxProgInfo.isReadme(item.name, item.source)) { bad.push(f.name + ' はプログラムではないので読みませんでした'); continue; }
+          item.source = FxProgInfo.tidy(item.name, item.source);
+        }
         if (dec && dec.unknown) bad.push(dec.name + ' に読めない記号 ' + dec.unknown + ' 個');
         const o = got.get(item.name);
         if (!o || f.lastModified > o.t || (f.lastModified === o.t && /\.ccl$/i.test(f.name))) got.set(item.name, { ...item, t: f.lastModified });

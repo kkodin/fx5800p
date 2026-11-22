@@ -439,8 +439,8 @@
             const d = JSON.parse(localStorage.getItem(KEY) || '{}');
             d.programs = Array.isArray(d.programs) ? d.programs : [];
             const r = FxProgInfo.addToKnown(d.programs);
-            if (r.done.length) localStorage.setItem(KEY, JSON.stringify(d));
-            toast((r.done.length ? r.done.join('・') + ' に説明を付けました。' : '説明を付けたプログラムはありません（電卓アプリに KAIHOU などが入っていない）。') + (r.skipped.length ? '　付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）' : ''));
+            if (r.done.length || r.fixed.length) localStorage.setItem(KEY, JSON.stringify(d));
+            toast(FxProgInfo.report(r));
           } catch (e) { toast('付けられませんでした：' + e.message); }
           return false;
         } },

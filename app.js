@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.5';
+  const VERSION = '1.4.6';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -879,11 +879,11 @@
       { label: 'EXPORT txt書出', act: () => openProgList('EXPORT') },
       { label: 'CCL 電卓用に書出', act: () => openProgList('CCL') },
       { label: 'INFO 手持ちに説明を付ける', act: () => {
-        // KAIHOU・SUB1・SUB2・KYOKUSEN に、日本語の名前・使い方・変数の名前を付ける（中身が元と同じときだけ）
+        // KAIHOU・SUB1・SUB2・KYOKUSEN・実機用の一式に、日本語の名前・使い方・変数の名前を付ける（中身が元と同じときだけ）。説明の .txt ごと取り込んだものは本文だけに直す
         if (!window.FxProgInfo) { toast('説明の部品を読めませんでした'); return; }
         const r = FxProgInfo.addToKnown(S.programs);
-        if (r.done.length) save();
-        toast((r.done.length ? r.done.join('・') + ' に説明を付けました。' : '説明を付けたプログラムはありません。') + (r.skipped.length ? '　付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）' : ''), 8000);
+        if (r.done.length || r.fixed.length) save();
+        toast(FxProgInfo.report(r), 9000);
         openProgList('RUN');
       } },
       { label: 'BACKUP 全保存', act: backupAll },
@@ -1280,7 +1280,7 @@
       return;
     }
     let got = [];
-    const bad = [];
+    const bad = [], skipped = [];
     for (const f of files) {
       if (f.size > 200000) { toast(f.name + ' は大きすぎます'); continue; }
       try {
@@ -1292,7 +1292,13 @@
           continue;
         }
         const name = f.name.replace(/\.[^.]+$/, '').replace(/\s+(COMP|BASE-N|FORMULA)(\s+[0-9A-F]+)?$/i, '').trim();
-        got.push({ name, mode: 'COMP', source: (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, ''), time: f.lastModified });
+        let text = (await readText(f)).replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+        // 「実機用プログラム」フォルダの読み物は飛ばし、説明の .txt は本文だけにする（元と同じなら日本語の名前などを付ける）
+        if (window.FxProgInfo) {
+          if (FxProgInfo.isReadme(name, text)) { skipped.push(f.name); continue; }
+          text = FxProgInfo.tidy(name, text);
+        }
+        got.push({ name, mode: 'COMP', source: text, time: f.lastModified });
       } catch (e) { bad.push(f.name + '：' + e.message); }
     }
     // 同じ名前が複数あれば、更新日時の新しい方（同じなら .ccl）を使う
@@ -1304,6 +1310,8 @@
     // tail：電卓から読んだときの最後の空の改行の数（.ccl に書き出し直すと元と同じになる）
     got = [...pick.values()].map(g => g.tail ? { name: g.name, mode: g.mode, source: g.source, tail: g.tail } : { name: g.name, mode: g.mode, source: g.source });
     if (bad.length) toast('注意：' + bad.join('、'), 7000);
+    else if (skipped.length) toast(skipped.join('・') + ' はプログラムではないので読みませんでした', 5000);
+    if (!got.length) { render(); return; }
     const dup = got.filter(g => S.programs.some(p => p.name === g.name));
     const apply = overwrite => {
       let n = 0;
@@ -1312,7 +1320,7 @@
         if (i >= 0) { if (!overwrite) continue; S.programs[i] = g; } else S.programs.push(g);
         n++;
       }
-      save(); toast(n + ' 本を読み込みました'); openProgList('RUN'); render();
+      save(); toast(n + ' 本を読み込みました' + (skipped.length ? '（' + skipped.join('・') + ' はプログラムではないので読みませんでした）' : ''), skipped.length ? 6000 : 3000); openProgList('RUN'); render();
     };
     if (dup.length) { askConfirm('同じ名前 ' + dup.length + ' 本を上書きしますか（No＝新しい分だけ）', () => apply(true), () => apply(false)); render(); }
     else apply(false);

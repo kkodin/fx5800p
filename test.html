@@ -398,6 +398,29 @@
     return FxProgInfo.addToKnown(progs).done.join(',');
   });
   test('中身が違う手持ちには付けない', 'KYOKUSEN', () => FxProgInfo.addToKnown([{ name: 'KYOKUSEN', source: '1→A' }]).skipped.map(x => x.name).join(','));
+  // 「実機用プログラム」フォルダの説明の .txt をそのまま取り込んだとき
+  const guideOf = name => {
+    const p = FxSokusetsu.calcPrograms().find(x => x.name === name);
+    return '■ ' + name + '：説明\n使う変数：A〜Z\n大きさ：531 バイト\n\n【解説】\nZ 1/0：高さ\n\n【プログラム（実機に打ち込む文）】\n' + FxBasic.strip(p.source).replace(/\n/g, '\r\n') + '\r\n';
+  };
+  test('説明の .txt は本文だけを取り出す', true, () => FxProgInfo.fromGuide(guideOf('NINI')) === FxBasic.strip(FxSokusetsu.calcPrograms().find(x => x.name === 'NINI').source));
+  test('ふつうのプログラムの .txt はそのまま', null, () => FxProgInfo.fromGuide('"A"?→A\nA◢'));
+  test('はじめに読む.txt はプログラムではない', 'true|false', () => FxProgInfo.isReadme('はじめに読む', 'x') + '|' + FxProgInfo.isReadme('NINI', '■ NINI'));
+  test('取り込むと本文に日本語の名前が付く（NINI）', '任意点|true', () => {
+    const s = FxProgInfo.tidy('NINI', guideOf('NINI'));
+    return FxBasic.meta(s).title.slice(0, 3) + '|' + !/■|【/.test(s);
+  });
+  test('取り込んだ NINI は実行できる（1 行目で止まらない）', 'input', () => {
+    const src = FxProgInfo.tidy('NINI', guideOf('NINI'));
+    const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;
+    const g = FxBasic.run({ name: 'NINI', source: src }, { vars, io: { print() {}, printValue() {}, locate() {}, cls() {} }, library: [] });
+    return g.next().value.type;
+  });
+  test('説明の文ごと入っていた手持ちを INFO で直す', 'NINI,HADI|NINI,HADI', () => {
+    const progs = [{ name: 'NINI', source: guideOf('NINI').replace(/\r\n/g, '\n') }, { name: 'HADI', source: guideOf('HADI').replace(/\r\n/g, '\n') }];
+    const r = FxProgInfo.addToKnown(progs);
+    return r.fixed.join(',') + '|' + r.done.join(',');
+  });
   test('付けたあとも動きは同じ（KAIHOU の 10 m・45°）', '7.071|7.071', () => {
     const progs = [{ name: 'KAIHOU', source: FxProgInfo.attach('KAIHOU', FxProgInfo.KNOWN.KAIHOU) }, { name: 'SUB1', source: FxProgInfo.attach('SUB1', FxProgInfo.KNOWN.SUB1) }, { name: 'SUB2', source: FxProgInfo.attach('SUB2', FxProgInfo.KNOWN.SUB2) }];
     const vars = { Ans: 0, __z: [], __dim: 0 }; for (const L of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') vars[L] = 0;

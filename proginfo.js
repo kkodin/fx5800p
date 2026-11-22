@@ -111,17 +111,56 @@
   }
   // 比べるために、空白・改行・: を消す
   const norm = s => String(s || '').split('\n').filter(l => !isNote(l)).join('').replace(/[\s:：]/g, '');
-  // 電卓アプリのプログラムに説明を付ける。戻り値：{ done: [名前], skipped: [{ name, why }] }
-  function addToKnown(programs) {
-    const done = [], skipped = [];
-    for (const name of Object.keys(KNOWN)) {
-      const p = programs.find(x => x.name === name);
-      if (!p) continue;
-      if (norm(p.source) !== norm(KNOWN[name])) { skipped.push({ name, why: '中身が電卓から吸い出した元のものと違うので、付けませんでした' }); continue; }
-      p.source = attach(name, p.source);
-      done.push(name);
-    }
-    return { done, skipped };
+  // 「実機用プログラム」フォルダの説明の .txt（■ 名前… 【解説】… 【プログラム（実機に打ち込む文）】 本文）
+  const GUIDE_MARK = '【プログラム（実機に打ち込む文）】';
+  // 説明の .txt なら本文だけを返す。違えば null
+  function fromGuide(text) {
+    const s = String(text || '').replace(/\r\n?/g, '\n');
+    const i = s.indexOf(GUIDE_MARK);
+    if (i < 0) return null;
+    return s.slice(i + GUIDE_MARK.length).replace(/^\s*\n/, '').replace(/\s+$/, '');
   }
-  root.FxProgInfo = { INFO, KNOWN, attach, addToKnown, lines };
+  // プログラムではない読み物（はじめに読む.txt）
+  const isReadme = (name, text) => /^はじめに読む/.test(String(name || '')) || /^\s*実機（fx-5800P）用のプログラム一式/.test(String(text || ''));
+  // 比べる元：手持ちの元（KNOWN）と、アプリが作る実機用の一式（sokusetsu.js・senkei.js が読み込まれているとき）
+  function refs() {
+    const r = Object.assign({}, KNOWN);
+    try { for (const p of (root.FxSokusetsu ? root.FxSokusetsu.calcPrograms() : [])) r[p.name] = p.source; } catch (e) { /* 一式が作れなくても手持ちの分は使う */ }
+    try { for (const p of (root.FxSenkei ? root.FxSenkei.calcCurvePrograms() : [])) r[p.name] = p.source; } catch (e) { /* 同上 */ }
+    return r;
+  }
+  // 取り込んだ文を整える：説明の .txt なら本文だけにし、元と同じ中身なら日本語の名前・使い方・変数の名前を付ける
+  function tidy(name, text, R) {
+    let src = String(text || '').replace(/\r\n?/g, '\n');
+    const g = fromGuide(src);
+    if (g !== null) src = g;
+    R = R || refs();
+    if (INFO[name] && R[name] && norm(src) === norm(R[name])) src = attach(name, src);
+    return src;
+  }
+  // 電卓アプリのプログラムに説明を付ける（説明の .txt をそのまま取り込んだものは本文だけに直す）
+  // 戻り値：{ done: [名前], fixed: [名前], skipped: [{ name, why }] }
+  function addToKnown(programs) {
+    const done = [], fixed = [], skipped = [];
+    const R = refs();
+    for (const p of programs) {
+      const g = fromGuide(p.source);
+      if (g !== null) { p.source = g; fixed.push(p.name); }
+      if (!INFO[p.name] || !R[p.name]) continue;
+      if (norm(p.source) !== norm(R[p.name])) { skipped.push({ name: p.name, why: KNOWN[p.name] ? '中身が電卓から吸い出した元のものと違うので、付けませんでした' : '中身がアプリの実機用の一式と違うので、付けませんでした' }); continue; }
+      p.source = attach(p.name, p.source);
+      done.push(p.name);
+    }
+    return { done, fixed, skipped };
+  }
+  // addToKnown の結果を、利用者向けの 1 文に
+  function report(r) {
+    const t = [];
+    if (r.fixed.length) t.push(r.fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました。');
+    if (r.done.length) t.push(r.done.join('・') + ' に日本語の名前・使い方・変数の名前を付けました。');
+    if (!t.length) t.push('説明を付けたプログラムはありません。');
+    if (r.skipped.length) t.push('付けなかった：' + r.skipped.map(x => x.name).join('・') + '（中身が元と違う）');
+    return t.join('　');
+  }
+  root.FxProgInfo = { INFO, KNOWN, attach, addToKnown, lines, fromGuide, isReadme, tidy, report };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
