@@ -74,6 +74,11 @@
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const halfPercent = value => Math.round(value * 2) / 2;
+  const EDGE_EPSILON = 1e-7;
+  function overlapsOn(a, b, position, size) {
+    return a[position] + a[size] > b[position] + EDGE_EPSILON &&
+      b[position] + b[size] > a[position] + EDGE_EPSILON;
+  }
   function minSize(block) {
     const keys = KEY_MIN[block];
     return keys ? { w: Math.min(100, keys.w / info.W * 100), h: Math.min(100, keys.h / info.H * 100) } : { w: 12, h: 8 };
@@ -91,7 +96,7 @@
     const edge = rect[origin] + rect[axis];
     let distance = SNAP_PX, size = rect[axis];
     for (const other of neighbors) {
-      if (rect[across] >= other[across] + other[span] || other[across] >= rect[across] + rect[span]) continue;
+      if (!overlapsOn(rect, other, across, span)) continue;
       const gap = Math.abs(edge - other[origin]) * scale / 100;
       const candidate = other[origin] - rect[origin];
       if (gap > distance || candidate < min[axis]) continue;
@@ -99,6 +104,29 @@
       size = candidate;
     }
     return size;
+  }
+
+  // ひとつの軸ずつ、現在位置から行き先までに触れる最初の縁で止める。
+  // すでに重なっている窓は障害とせず、外へ引き離せるようにする。
+  function stopAtBlock(rect, neighbors, axis, target) {
+    const start = rect[axis];
+    if (Math.abs(target - start) <= EDGE_EPSILON) return start;
+    const horizontal = axis === 'x';
+    const across = horizontal ? 'y' : 'x';
+    const alongSize = horizontal ? 'w' : 'h';
+    const acrossSize = horizontal ? 'h' : 'w';
+    const forward = target > start;
+    for (const other of neighbors) {
+      if (!overlapsOn(rect, other, across, acrossSize)) continue;
+      if (forward) {
+        const edge = other[axis] - rect[alongSize];
+        if (edge >= start - EDGE_EPSILON) target = Math.min(target, edge);
+      } else {
+        const edge = other[axis] + other[alongSize];
+        if (edge <= start + EDGE_EPSILON) target = Math.max(target, edge);
+      }
+    }
+    return target;
   }
 
   // ---- 画面に当てはめる ----
@@ -248,16 +276,21 @@
       if (!d || e.pointerId !== d.id || d.orient !== info.orient || d.W !== info.W || d.H !== info.H) return;
       const m = toLocal(e.clientX - d.x, e.clientY - d.y);
       const px = m.dx / info.W * 100, py = m.dy / info.H * 100, blocks = st[info.orient].blocks;
+      const neighbors = BLOCKS.filter(id => id !== b && (id !== 'tabs' || blocks.tabs.show))
+        .map(id => displayedBlock(id, blocks[id]));
       const rect = { ...d.p };
       if (kind === 'move') {
-        rect.x = clamp(halfPercent(rect.x + px), 0, 100 - rect.w);
-        rect.y = clamp(halfPercent(rect.y + py), 0, 100 - rect.h);
+        const current = displayedBlock(b, blocks[b]);
+        const x = clamp(halfPercent(d.p.x + px), 0, 100 - rect.w);
+        const y = clamp(halfPercent(d.p.y + py), 0, 100 - rect.h);
+        rect.x = current.x;
+        rect.y = current.y;
+        rect.x = stopAtBlock(rect, neighbors, 'x', x);
+        rect.y = stopAtBlock(rect, neighbors, 'y', y);
       } else {
         const min = minSize(b);
         rect.w = clamp(halfPercent(rect.w + px), min.w, 100 - rect.x);
         rect.h = clamp(halfPercent(rect.h + py), min.h, 100 - rect.y);
-        const neighbors = BLOCKS.filter(id => id !== b && (id !== 'tabs' || blocks.tabs.show))
-          .map(id => displayedBlock(id, blocks[id]));
         const w = snapSize(rect, neighbors, min, 'w');
         rect.h = snapSize(rect, neighbors, min, 'h');
         rect.w = w;
@@ -338,7 +371,7 @@
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
           seg([['standard', '標準の並び'], ['free', '自由配置']], () => st[info.orient].mode, v => { st[info.orient].mode = v; }),
           h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),
-          h('p', { class: 'lo-note', text: '自由配置のサイズ変更では、近くの窓の縁に吸い付きます。キーの窓は文字が重ならない大きさまで縮められます。' }),
+          h('p', { class: 'lo-note', text: '自由配置で窓を動かすと、隣の窓に当たる位置で止まります。サイズ変更では近くの縁に吸い付きます。キーの窓は文字が重ならない大きさまで縮められます。' }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
         h('div', {}, [h('h4', { text: 'カーソルキーの位置' }),
           seg([['left', '左'], ['right', '右']], () => st.cursorSide, v => { st.cursorSide = v; }),
