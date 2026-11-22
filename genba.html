@@ -15,7 +15,9 @@
 <script defer src="points.js?v=1.4.0-dev"></script>
 <script defer src="store.js?v=1.4.0-dev"></script>
 <script defer src="dialog.js?v=1.4.0-dev"></script>
+<script defer src="sokusetsu.js?v=1.4.0-dev"></script>
 <script defer src="genba.js?v=1.4.0-dev"></script>
+<script defer src="genba-calc.js?v=1.4.0-dev"></script>
 </head>
 <body>
 <header class="top">
@@ -58,10 +60,16 @@
     </div>
   </section>
   <section id="tab-calc" class="tab" hidden>
-    <div class="empty"><p>測設の画面は次の段階で作ります。</p></div>
+    <div id="calcNoSite" class="empty" hidden><p>先に「座標一覧」で現場を作ってください。</p></div>
+    <div id="calcView"></div>
   </section>
   <section id="tab-hist" class="tab" hidden>
-    <div class="empty"><p>計算の履歴は次の段階で作ります。</p></div>
+    <div class="bar">
+      <span id="histCount" class="count"></span>
+      <span class="grow"></span>
+      <button type="button" id="histCsv">CSV 書出</button>
+    </div>
+    <ul id="histList" class="list" aria-label="計算の履歴"></ul>
   </section>
 </main>
 <input type="file" id="fileIn" hidden>

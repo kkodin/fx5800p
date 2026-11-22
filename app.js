@@ -642,7 +642,8 @@
       { label: 'COMP 通常計算', act: () => { mode = 'comp'; } },
       { label: 'PROG プログラム', act: openProgMenu },
       { label: 'SETUP 設定', act: openSetup },
-      { label: 'VAR 変数一覧', act: openVarList }
+      { label: 'VAR 変数一覧', act: openVarList },
+      { label: 'GENBA 測設・現場の座標', act: () => { mode = 'comp'; location.href = 'genba.html'; } }
     ]);
   }
   // 設定を変えて、開く前の画面（計算・実行中の入力など）へ戻る

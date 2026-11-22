@@ -37,7 +37,9 @@
     state.points = state.site ? await ST.listPoints(state.site.id) : [];
     state.shown = PAGE;
     render();
+    for (const fn of hooks.points) await fn();
   }
+  const hooks = { points: [], tab: [] };
 
   function siteForm(site, title, okLabel) {
     return new Promise(resolve => {
@@ -292,12 +294,24 @@
       const li = e.target.closest('li[data-id]'); if (!li) return;
       const p = state.points.find(x => x.id === li.dataset.id); if (p) pointForm(p);
     });
-    document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
-      document.querySelectorAll('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + b.dataset.tab; });
-    }));
+    document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   }
+  function showTab(name) {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+    document.querySelectorAll('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + name; });
+    state.tab = name;
+    for (const fn of hooks.tab) fn(name);
+    window.scrollTo(0, 0);
+  }
+  // 最近使った点を記録する（新しい順に 20 点まで）
+  async function useRecent(ids) {
+    if (!state.site || !ids.length) return;
+    state.recent = ids.concat(state.recent.filter(id => !ids.includes(id))).slice(0, 20);
+    await ST.setMeta('recent:' + state.site.id, state.recent);
+  }
+  // 測設・履歴（genba-calc.js）から使う
+  window.FxGenba = { state, hooks, toast, guard, download, esc, f3, today, safeName, loadPoints, pickFile, showTab, useRecent, siteMenu: () => siteMenu() };
   bind();
-  guard(async () => { await ST.persist(); await loadSites(); });
+  document.addEventListener('DOMContentLoaded', () => guard(async () => { await ST.persist(); await loadSites(); }));
   window.__genba = state;   // 確かめ用
 })();

@@ -17,6 +17,7 @@
 <script src="angle.js"></script>
 <script src="geo.js"></script>
 <script src="points.js"></script>
+<script src="sokusetsu.js"></script>
 </head>
 <body>
 <h1>試験（angle.js・geo.js・points.js）</h1>
@@ -49,6 +50,9 @@
   ang('４５－３０－１５', deg(45, 30, 15));
   ang(' 45 - 30 - 15 ', deg(45, 30, 15));
   ang('45.504167', 45.504167);
+  ang('45.30.15', deg(45, 30, 15));
+  ang('169.41.43.5', deg(169, 41, 43.5));
+  bad('45.75.00');
   ang('0-00-00', 0);
   ang('-12-30-00', -deg(12, 30, 0));
   ang('359-59-59.9', deg(359, 59, 59.9));
@@ -168,6 +172,33 @@
     const many = []; for (let i = 0; i < 500; i++) many.push({ id: 'm' + i, name: (i % 3 ? 'No.' : '杭') + i, x: i, y: i, kind: '測点', memo: '' });
     const t0 = performance.now(); for (let k = 0; k < 10; k++) PT.search(many, String(k + 10)); return (performance.now() - t0) / 10 < 30;
   });
+
+  // ---- 測設のまとめ（sokusetsu.js） ----
+  const SK = FxSokusetsu;
+  const baseCalc = () => ({
+    k1: { name: 'K1', x: 1000, y: 2000 }, k2: { name: 'K2', x: 1050, y: 2080 },
+    o1: { h: '0-00-00', s: '44.721' }, o2: { h: '169.41.43', s: '50.000' },
+    targets: [{ id: 't1', name: 'No.1', mode: 'xy', x: 1030, y: 2050 }, { id: 't2', name: '観測1', mode: 'obs', h: '161-33-54', s: '14.142' }]
+  });
+  const r1 = SK.compute(baseCalc(), { tol: 0.01 });
+  // 観測値は mm・秒に丸めてあるので、器械点が 1mm ほどずれ、角度は数秒ずれる → ±5 秒で判定
+  const angNear = (expect, fn) => (name) => test(name + '（±5秒）', expect, fn, g => Math.abs(A.norm180(g - A.parse(expect))) * 3600 <= 5);
+  test('まとめ：器械点が決まる', true, () => r1.ready);
+  angNear('161-33-54', () => r1.targets[0].h)('まとめ：No.1 の角度');
+  test('まとめ：No.1 の距離（±2mm）', '14.142', () => r1.targets[0].s.toFixed(3), g => Math.abs(+g - 14.142) <= 0.002);
+  test('まとめ：観測から X（±3mm）', 1030, () => r1.targets[1].x, g => near(g, 1030, 0.003));
+  test('まとめ：観測から Y（±3mm）', 2050, () => r1.targets[1].y, g => near(g, 2050, 0.003));
+  test('まとめ：入力が足りないと案内', '既知点2の角度・距離を入れてください', () => { const c = baseCalc(); c.o2.s = ''; return SK.compute(c, {}).error; });
+  test('まとめ：角度の書き違い', true, () => { const c = baseCalc(); c.o1.h = '0-75-00'; return /分は 60/.test(SK.compute(c, {}).obs1.errH); });
+  test('まとめ：距離 0', '距離は 0 より大きくしてください', () => { const c = baseCalc(); c.o1.s = '0'; return SK.compute(c, {}).obs1.errS; });
+  test('まとめ：度.分秒の設定', true, () => { const c = baseCalc(); c.o2.h = '169.4143'; return SK.compute(c, { dmsDot: true }).ready && near(SK.compute(c, { dmsDot: true }).station.x, 1020, 0.003); });
+  angNear('161-33-54', () => SK.compute(baseCalc(), { zero: 'raw' }).targets[0].h)('まとめ：器械の読みのまま（K1=0 なら同じ角度）');
+  angNear('191-33-54', () => { const c = baseCalc(); c.o1.h = '30-00-00'; c.o2.h = '199-41-43'; return SK.compute(c, { zero: 'raw' }).targets[0].h; })('まとめ：器械の読みのまま（K1=30°）');
+  angNear('161-33-54', () => { const c = baseCalc(); c.o1.h = '30-00-00'; c.o2.h = '199-41-43'; return SK.compute(c, { zero: 'k1' }).targets[0].h; })('まとめ：K1 を 0 にする（K1=30° でも）');
+  test('まとめ：誤差のない観測なら秒まで一致', '161-33-54', () => { const T = { x: 1020, y: 2040 }, c = baseCalc(); c.o1 = { h: '0', s: String(G.dist(T, c.k1)) }; c.o2 = { h: String(G.azimuth(T, c.k2) - G.azimuth(T, c.k1)), s: String(G.dist(T, c.k2)) }; return A.format(SK.compute(c, {}).targets[0].h); });
+  const snap = SK.snapshot(baseCalc(), r1, { tol: 0.01 }, 'メモ');
+  test('履歴：入力と答えが残る', 'K1|2|メモ', () => [snap.k1.name, snap.targets.length, snap.memo].join('|'));
+  test('履歴の CSV（見出し＋測点 2 行）', 3, () => SK.historyCsv([Object.assign({ time: '2026-11-22T00:00:00Z' }, snap)], v => A.format(v)).trim().split('\r\n').length);
 
   // ---- 表示 ----
   const ng = rows.filter(r => !r.ok).length;
