@@ -89,6 +89,7 @@
   function toLocal(dx, dy) { return info.rotated ? { dx: dy, dy: -dx } : { dx, dy }; }
   function bindLcdResize() {
     const handle = opt.calc.querySelector('#lcdResize');
+    if (!handle) return;
     let drag = null;
     const resize = (layout, value) => {
       const max = Number(handle.getAttribute('aria-valuemax'));

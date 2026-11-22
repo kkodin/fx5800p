@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.10';
+  const VERSION = '1.4.11';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -1473,6 +1473,7 @@
   const LCD_FS = [13, 16, 19, 23, 28];
   function fitLcd() {
     const lcd = $('lcd'), calc = $('calc');
+    const handle = $('lcdResize');
     const layout = FxLayout.state, { free, orient } = FxLayout.info;
     if (!free && mode === 'menu') return;
     const style = getComputedStyle(lcd);
@@ -1504,15 +1505,16 @@
       const max = Math.max(0, Math.floor(Math.min(36 * rowHeight * fs, calc.clientHeight - fixed - base - keypadHeight)));
       const extra = Math.max(0, Math.min(max, Number(layout[orient].lcdExtra) || 0));
       calc.style.setProperty('--lcd-extra', extra + 'px');
-      const handle = $('lcdResize');
-      handle.setAttribute('aria-valuemin', '0');
-      handle.setAttribute('aria-valuemax', String(max));
-      handle.setAttribute('aria-valuenow', String(extra));
+      if (handle) {
+        handle.setAttribute('aria-valuemin', '0');
+        handle.setAttribute('aria-valuemax', String(max));
+        handle.setAttribute('aria-valuenow', String(extra));
+      }
       available = base + extra;
     }
     const rows = wide ? Math.max(4, Math.min(40, Math.floor((available / fs - indicatorHeight) / rowHeight + 0.001))) : 4;
     const cols = wide ? Math.min(48, Math.max(16, Math.floor(w / (fs * glyphWidth)))) : 16;
-    $('lcdResize').setAttribute('aria-valuetext', rows + ' 行');
+    if (handle) handle.setAttribute('aria-valuetext', rows + ' 行');
     document.documentElement.style.setProperty('--lcd-fs', fs.toFixed(2) + 'px');
     document.documentElement.style.setProperty('--rows', String(rows));
     LCD_ROWS = rows; LCD_COLS = cols; LCD_WIDE = wide;
@@ -1621,6 +1623,12 @@
       if (fixed.length) { save(); setTimeout(() => toast(fixed.join('・') + ' は説明の文ごと取り込まれていたので、プログラムの文だけに直しました', 8000), 300); }
     }
     physicalKeys();
+    // 古い画面に新しいスクリプトが読み込まれても、配置の初期化より先につまみを用意する。
+    if (!$('lcdResize')) {
+      $('lcd').parentElement.insertAdjacentHTML('beforeend', '<div id="lcdResize" class="lcd-resize" role="separator" tabindex="0"'
+        + ' aria-orientation="horizontal" aria-label="ディスプレイの高さ" aria-controls="screen"'
+        + ' title="ドラッグまたは上下キーでディスプレイの高さを変更"></div>');
+    }
     // 配置（▦ 配置）：縦横・ブロックの位置と大きさ・文字の大きさ。保存は S.layout
     FxLayout.init({
       calc: $('calc'),
