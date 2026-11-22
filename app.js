@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.7';
+  const VERSION = '1.4.8';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -99,6 +99,8 @@
   function line(text, opt = {}) { return { text: text ?? '', ...opt }; }
   // 液晶の行数（標準は 4。自由配置でディスプレイを高くすると増える）
   let LCD_ROWS = 4;
+  // 液晶の桁数と「見やすい表示」（自由配置で ▦ 配置 → ディスプレイの表示 が「見やすい表示」のとき）
+  let LCD_COLS = 16, LCD_WIDE = false;
   // 増えた行に出す、直前の計算と答え（新しい順に最大 20 件）
   const scrollback = [];
   function paint(lines) {
@@ -126,24 +128,25 @@
     if (mode === 'run' && run && !run.wait && !run.done) ind.push('<b class="busy">▮</b>');
     if (mode === 'edit' && edit) ind.unshift('<span class="ed">' + esc(edit.prog.name) + (edit.prog.mode === 'Formula' ? ' FM' : '') + '</span>');
     // 実行中に値を聞かれたとき：その変数の日本語の名前（'変数 の行から）を右側に出す
-    if (mode === 'run' && hintName) ind.push('<span class="ihint" title="' + esc(hintName) + '">' + esc(hintName) + '</span>');
+    if (mode === 'run' && hintName && !(run && run.grid && run.grid.wide)) ind.push('<span class="ihint" title="' + esc(hintName) + '">' + esc(hintName) + '</span>');
     if (extra) ind.push(extra);
     $('ind').innerHTML = ind.join(' ');
   }
   // 式を16桁で折り返し、カーソルを含む行を表示する
   function wrapWithCursor(text, curIdx, maxLines) {
+    const W = LCD_COLS;
     const chars = Array.from(text), curChar = Array.from(text.slice(0, curIdx)).length;
     const rows = [];
-    for (let i = 0; i <= chars.length; i += 16) rows.push(i);
-    if (chars.length && chars.length % 16 === 0 && curChar === chars.length) { /* カーソルは次の行 */ } else if (rows.length > 1 && rows[rows.length - 1] === chars.length) rows.pop();
-    const curRow = Math.min(Math.floor(curChar / 16), rows.length - 1);
+    for (let i = 0; i <= chars.length; i += W) rows.push(i);
+    if (chars.length && chars.length % W === 0 && curChar === chars.length) { /* カーソルは次の行 */ } else if (rows.length > 1 && rows[rows.length - 1] === chars.length) rows.pop();
+    const curRow = Math.min(Math.floor(curChar / W), rows.length - 1);
     const first = Math.max(0, curRow - maxLines + 1);
     const lines = [];
     for (let r = first; r < Math.min(rows.length, first + maxLines); r++) {
-      const seg = chars.slice(r * 16, r * 16 + 16);
+      const seg = chars.slice(r * W, r * W + W);
       let html = '';
       for (let j = 0; j <= seg.length; j++) {
-        const pos = r * 16 + j;
+        const pos = r * W + j;
         if (pos === curChar && curIdx >= 0) html += j < seg.length ? '<span class="cur">' + esc(seg[j]) + '</span>' : '<span class="cur">&nbsp;</span>';
         else if (j < seg.length) html += esc(seg[j]);
       }
@@ -190,7 +193,7 @@
       if (!extra) return [];
       const past = scrollback.filter(x => x.obj !== r).slice(0, Math.ceil(extra / 2)).reverse();
       const ls = [];
-      for (const x of past) ls.push(line(x.label.slice(0, 16), { small: false }), line(x.value, { right: true }));
+      for (const x of past) ls.push(line(Array.from(x.label).slice(0, LCD_COLS).join(''), { small: false }), line(x.value, { right: true }));
       while (ls.length < extra) ls.unshift(line(''));
       return ls.slice(-extra);
     };
@@ -1019,20 +1022,41 @@
   }
 
   // ---- 実行（16桁×4行） ---------------------------------------------------
-  function newGrid() { return { rows: Array.from({ length: 4 }, () => Array(16).fill(' ')), row: 0 }; }
-  function gridNewLine(g) { if (g.row >= 4) { g.rows.shift(); g.rows.push(Array(16).fill(' ')); g.row = 3; } }
+  //   実機と同じ（wide でない）：16 桁×4 行。見やすい表示（wide）：桁は LCD_COLS、行は 80 行まで残して下から LCD_ROWS 行を出す
+  //   right[i]：右寄せの行（答え）。hints[i]：その行の右に小さく出す変数の名前
+  const GRID_KEEP = 80;
+  const blankRow = n => Array(n).fill(' ');
+  function newGrid() {
+    const wide = LCD_WIDE;
+    return { wide, cap: wide ? GRID_KEEP : 4, rows: wide ? [] : Array.from({ length: 4 }, () => blankRow(16)), right: wide ? [] : [false, false, false, false], hints: wide ? [] : ['', '', '', ''], row: 0, maxRow: 0 };
+  }
+  const gridW = g => g.wide ? Math.max(16, LCD_COLS) : 16;
+  function gridEnsure(g, i) { while (g.rows.length <= i) { g.rows.push(blankRow(gridW(g))); g.right.push(false); g.hints.push(''); } }
+  function gridNewLine(g) {
+    if (g.row >= g.cap) { g.rows.shift(); g.right.shift(); g.hints.shift(); g.rows.push(blankRow(gridW(g))); g.right.push(false); g.hints.push(''); g.row = g.cap - 1; g.maxRow = Math.max(0, g.maxRow - 1); }
+    gridEnsure(g, g.row);
+  }
   const io = {
     cls() { run.grid = newGrid(); },
     print(text) {
-      const g = run.grid, ch = Array.from(String(text));
+      const g = run.grid, ch = Array.from(String(text)), W = gridW(g);
       let i = 0;
-      do { gridNewLine(g); g.rows[g.row] = Array.from({ length: 16 }, (_, j) => ch[i + j] ?? ' '); g.row++; i += 16; } while (i < ch.length);
+      do { gridNewLine(g); g.rows[g.row] = Array.from({ length: W }, (_, j) => ch[i + j] ?? ' '); g.right[g.row] = false; g.hints[g.row] = ''; g.row++; i += W; } while (i < ch.length);
     },
     printValue(text) {
-      const g = run.grid, ch = Array.from(String(text)).slice(-16);
+      const g = run.grid;
+      if (g.wide) { gridNewLine(g); g.rows[g.row] = Array.from(String(text)); g.right[g.row] = true; g.hints[g.row] = ''; g.row++; return; }
+      const ch = Array.from(String(text)).slice(-16);
       gridNewLine(g); g.rows[g.row] = Array.from({ length: 16 }, (_, j) => ch[j - (16 - ch.length)] ?? ' '); g.row++;
     },
-    locate(x, y, text) { const g = run.grid; const ch = Array.from(String(text)); for (let i = 0; i < ch.length && x - 1 + i < 16; i++) g.rows[y - 1][x - 1 + i] = ch[i]; }
+    locate(x, y, text) {
+      const g = run.grid, W = gridW(g), ch = Array.from(String(text));
+      gridEnsure(g, y - 1);
+      if (g.right[y - 1]) { const r = g.rows[y - 1]; g.rows[y - 1] = Array.from({ length: W }, (_, j) => r[j - (W - r.length)] ?? ' '); g.right[y - 1] = false; }
+      const r = g.rows[y - 1]; while (r.length < W) r.push(' ');
+      for (let i = 0; i < ch.length && x - 1 + i < W; i++) r[x - 1 + i] = ch[i];
+      g.maxRow = Math.max(g.maxRow, y);
+    }
   };
   function startRun(p, from) {
     if (run && !run.done) run.stopped = true;
@@ -1067,6 +1091,16 @@
         if (ev.type === 'tick') { render(); setTimeout(() => pump(), 0); return; }
         if (ev.type === 'input') {
           token.wait = ev; token.inToks = []; token.inCur = 0;
+          if (token.grid.wide) {
+            // 見やすい表示：聞かれた行の「?」の右に入力し、変数の名前を右に小さく出す。前の入力・答えは上に残す
+            io.print(ev.label + '?');
+            const g = token.grid;
+            token.inRow = g.row - 1;
+            token.inPrefix = g.rows[token.inRow].join('').replace(/\s+$/, '') + ' ';
+            token.keepText = ev.keep ? ev.currentText : '';
+            g.hints[token.inRow] = runHint();
+            render(); return;
+          }
           io.print(ev.label + '?');
           if (ev.keep) io.printValue(ev.currentText); else gridNewLine(token.grid);
           token.inRow = Math.min(token.grid.row - (ev.keep ? 1 : 0), 3);
@@ -1119,12 +1153,37 @@
   }
   function renderRun() {
     setHint(runHint());
+    if (run.grid.wide) return renderRunWide();
     const g = run.grid, lines = g.rows.map(r => line(r.join('')));
     if (run.wait && run.wait.type === 'input' && (run.inToks.length || !run.wait.keep)) {
       const t = run.inToks.join(''), cur = run.inToks.slice(0, run.inCur).join('').length;
       lines[run.inRow] = wrapWithCursor(t, cur, 1)[0];
     }
     if (run.done && !run.prog.name.startsWith('(')) lines.forEach(l => { l.html = undefined; });
+    paint(lines);
+  }
+  // 見やすい表示の実行画面：下から LCD_ROWS 行。聞かれている行は「KX? 100.123▮　既知点の X」
+  function renderRunWide() {
+    const g = run.grid, w = run.wait, asking = !run.done && w && w.type === 'input';
+    const hintHtml = t => t ? '<span class="lhint">' + esc(t) + '</span>' : '';
+    let used = Math.max(g.row, g.maxRow);
+    // 止まっている・終わったときは、いちばん下にどうすればよいかを出す
+    const status = run.done ? (run.stopped ? '' : '― 終わり　EXE：もう一度　EXIT：一覧 ―') : (w && w.type === 'pause' ? '◢ EXE で続き' : '');
+    const total = used + (status ? 1 : 0);
+    const start = Math.max(0, total - LCD_ROWS);
+    const lines = [];
+    for (let i = start; i < used; i++) {
+      const text = (g.rows[i] || []).join('');
+      if (asking && i === run.inRow) {
+        const before = run.inToks.slice(0, run.inCur).join(''), at = run.inToks[run.inCur], after = run.inToks.slice(run.inCur + 1).join('');
+        let body;
+        if (!run.inToks.length && run.keepText) body = '<span class="cur">' + esc(Array.from(run.keepText)[0] || ' ') + '</span>' + esc(Array.from(run.keepText).slice(1).join(''));
+        else body = esc(before) + '<span class="cur">' + (at === undefined ? '&nbsp;' : esc(at)) + '</span>' + esc(after);
+        lines.push(line('', { html: esc(run.inPrefix) + body + hintHtml(g.hints[i]) }));
+      } else if (g.right[i]) lines.push(line(text, { right: true }));
+      else lines.push(line('', { html: esc(text.replace(/\s+$/, '')) + hintHtml(g.hints[i]) }));
+    }
+    if (status) lines.push(line(status, { small: true }));
     paint(lines);
   }
   function runKey(k) {
@@ -1144,6 +1203,13 @@
       if (!text && !w.keep) return;
       try { if (text) E.evaluate(text, ctxComp()); } catch (e) { toast(e.message); return; }
       run.wait = null;
+      if (run.grid.wide) {
+        // 聞かれた行を「KX? 100.123」にして残す（変数の名前もそのまま）
+        const g = run.grid, shown = text || run.keepText || '';
+        g.rows[run.inRow] = Array.from(run.inPrefix + shown);
+        pump(text);
+        return;
+      }
       run.grid.row = Math.min(run.inRow + 1, 4);
       if (text) { run.grid.rows[run.inRow] = Array(16).fill(' '); const ch = Array.from(text).slice(-16); ch.forEach((c, j) => { run.grid.rows[run.inRow][j] = c; }); }
       pump(text);
@@ -1399,6 +1465,8 @@
     };
     document.querySelectorAll('.keypad, .top').forEach(bind);
   }
+  // 見やすい表示のディスプレイの文字の大きさ（px）
+  const LCD_FS = [13, 16, 19, 23, 28];
   function fitLcd() {
     const scr = $('lcd');
     const w = scr.clientWidth - 16;
@@ -1408,7 +1476,14 @@
     const cw = probe.getBoundingClientRect().width / 10 / parseFloat(getComputedStyle(probe).fontSize);
     probe.remove();
     let fs = Math.min(30, w / 16 / (cw || 0.6));
-    let rows = 4;
+    let rows = 4, cols = 16;
+    const LS = window.FxLayout ? FxLayout.state : null;
+    const wide = !!(window.FxLayout && FxLayout.info.free && LS && LS.lcd === 'wide');
+    // 見やすい表示：文字の大きさを選んだ段（16 桁が入る大きさより大きくはしない）にし、入るだけ桁を増やす（16〜48 桁）
+    if (wide) {
+      fs = Math.max(10, Math.min(fs, LCD_FS[(LS.lcdFont || 3) - 1]));
+      cols = Math.min(48, Math.max(16, Math.floor(w / (fs * (cw || 0.6)))));
+    }
     // 自由配置：ディスプレイの高さから行数を決める（4〜14 行）。4 行も入らないときは文字を小さくする
     if (window.FxLayout && FxLayout.info.free) {
       const blk = document.querySelector('.blk-lcd'), bar = blk.querySelector('.bar');
@@ -1416,11 +1491,11 @@
       const per = (f) => f * 1.22, indH = f => f * 0.72;
       rows = Math.floor((avail - indH(fs)) / per(fs));
       if (rows < 4) { fs = Math.max(9, (avail) / (4 * 1.22 + 0.72)); rows = 4; }
-      rows = Math.min(14, Math.max(4, rows));
+      rows = Math.min(wide ? 40 : 14, Math.max(4, rows));
     }
     document.documentElement.style.setProperty('--lcd-fs', fs.toFixed(2) + 'px');
     document.documentElement.style.setProperty('--rows', String(rows));
-    LCD_ROWS = rows;
+    LCD_ROWS = rows; LCD_COLS = cols; LCD_WIDE = wide;
   }
   function physicalKeys() {
     const map = { Enter: 'EXE', Backspace: 'DEL', Escape: 'AC', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', '+': 'ADD', '-': 'SUB', '*': 'MUL', '/': 'DIV', '(': 'LP', ')': 'RP', ',': 'COMMA', '.': 'DOT', '^': 'POW' };
@@ -1529,7 +1604,7 @@
     bindTabs();
     fitLcd();
     window.addEventListener('resize', fitLcd);
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { const r0 = LCD_ROWS; fitLcd(); if (LCD_ROWS !== r0) render(); }).observe(document.querySelector('.blk-lcd'));
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { const r0 = LCD_ROWS, c0 = LCD_COLS; fitLcd(); if (LCD_ROWS !== r0 || LCD_COLS !== c0) render(); }).observe(document.querySelector('.blk-lcd'));
     render();
     migrateOld();
     // PC エディターで直したプログラムを、開いている電卓にもすぐ反映する

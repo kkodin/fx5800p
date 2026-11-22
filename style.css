@@ -54,6 +54,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-user
 .ln.inv { background: var(--ink); color: var(--lcd); }
 .ln.small { font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: .78em; line-height: 1.56; text-overflow: ellipsis; }
 .ln.tap { cursor: pointer; }
+/* 見やすい表示：行の右に小さく出す変数の名前 */
+.ln .lhint { float: right; margin-left: .6em; font: 600 .6em/2.03 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; opacity: .72; }
 .cur { background: var(--ink); color: var(--lcd); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { background: transparent; color: inherit; } }
 .probe { position: absolute; visibility: hidden; white-space: pre; font-size: 20px; }

@@ -21,7 +21,7 @@
   // 電卓のメニューを開いた・閉じた（app.js が呼ぶ）
   function setMenu(open) { if (open === menuOpen) return; menuOpen = open; if (info.free) apply(); }
 
-  function defaults() { return { orient: 'auto', font: 3, portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
+  function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
   function fix(s) {
     const d = defaults();
     s = Object.assign(d, s || {});
@@ -30,6 +30,9 @@
       s[o].blocks = Object.assign(clone(DEF[o].blocks), s[o].blocks || {});
     }
     if (!(s.font >= 1 && s.font <= 5)) s.font = 3;
+    // ディスプレイ：wide＝見やすい表示（行・桁を増やす）、real＝実機と同じ 16 桁×4 行
+    if (!['wide', 'real'].includes(s.lcd)) s.lcd = 'wide';
+    if (!(s.lcdFont >= 1 && s.lcdFont <= 5)) s.lcdFont = 3;
     if (!['auto', 'portrait', 'landscape'].includes(s.orient)) s.orient = 'auto';
     if (!Array.isArray(s.presets)) s.presets = [];
     return s;
@@ -178,7 +181,13 @@
           h('p', { class: 'lo-note', text: '「縦」「横」に決めると、端末の向きと違うときは画面ごと回して表示します。縦と横で、それぞれの配置を覚えます。' })]),
         h('div', {}, [h('h4', { text: '文字の大きさ（ボタン・タブ・一覧）' }),
           seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], st.font, v => { st.font = v; save(); apply(); }),
-          h('p', { class: 'lo-note', text: 'ディスプレイの文字は、ディスプレイの幅に合わせて決まります（16 桁）。ディスプレイを高くすると行数が増えます。' })]),
+          h('p', { class: 'lo-note', text: 'ボタン・タブの画面・一覧の文字に効きます。' })]),
+        h('div', {}, [h('h4', { text: 'ディスプレイの表示' }),
+          seg([['wide', '見やすい表示（行と桁を増やす）'], ['real', '実機と同じ（16 桁×4 行）']], st.lcd, v => { st.lcd = v; save(); apply(); }),
+          h('p', { class: 'lo-note', text: '見やすい表示：自由配置でディスプレイを大きくすると、その分だけ行と桁が増えます。プログラムの実行中は、聞かれた値の横に答えと変数の名前を出し、前の入力・答えも残します。実機と同じ：実機と同じ 16 桁×4 行で表示します（Locate を使うプログラムの見た目を確かめるとき）。標準の並びのときは、どちらも 16 桁×4 行です。' }),
+          h('h4', { text: 'ディスプレイの文字（見やすい表示のとき）' }),
+          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], st.lcdFont, v => { st.lcdFont = v; save(); apply(); }),
+          h('p', { class: 'lo-note', text: '小さくするほど、行と桁が増えます（16 桁より少なくはなりません）。' })]),
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
           seg([['standard', '標準の並び'], ['free', '自由配置']], st[info.orient].mode, v => { st[info.orient].mode = v; save(); apply(); updNote(); }),
           h('div', { class: 'lo-seg', style: 'margin-top:8px' }, [h('button', { type: 'button', class: 'on', text: '▦ 配置を変える（動かす・大きさ）', onclick: () => { dlg.close(); startEdit(); } })])]),
