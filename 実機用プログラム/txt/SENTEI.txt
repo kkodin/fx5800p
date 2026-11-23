@@ -1,0 +1,63 @@
+﻿'名前 線形を入れる
+'説明 曲線の数・BP〜IP・半径・交角・向き・IP 間・最後の直線を入れて、線形を覚える（最初に 1 回）
+'使い方 BP-X・BP-Y：BP（路線の始まり）の座標
+'使い方 HOUKOU：BP→IP1 の方向角（°′″ キー）
+'使い方 N：曲線の数
+'使い方 BP-IP：BP から IP1 までの距離
+'使い方 曲線ごとに R（半径）、IA（交角、°′″ キー）、MUKI（右曲線＝1、左曲線＝−1）
+'使い方 その曲線のあとの直線の方向角 HOUKOU が出る
+'使い方 IP-IP：次の IP までの距離（最後の曲線では IP-EP＝最後の直線の距離）
+'使い方 最後に EP KYORI（BP から EP までの距離）が出る
+'変数 X=BP の X（途中は各直線の始点）
+'変数 Y=BP の Y（途中は各直線の始点）
+'変数 W=直線の方向角
+'変数 N=曲線の数
+'変数 L=距離（BP〜IP・IP 間・最後の直線）
+'変数 R=曲線の半径
+'変数 O=交角（右＋・左−）
+'変数 T=向き（1／−1）、そのあと接線長 TL
+'変数 M=何本目の曲線か
+'変数 Z=BP からの距離（たし算していく）
+'変数 E=IP の X
+'変数 F=IP の Y
+'変数 P=BC の X
+'変数 Q=BC の Y
+'変数 U=向き（1／−1）
+'変数 S=Z[ ] の番号
+'変数 Z[1]=曲線の数
+'解説 線形は Z[1]〜Z[11N+6] に覚える
+'解説 KAIHOU の A〜D・G・H・K は使わない
+'解説 Z[ ] の命令コードが未確定なので、実機には手で打ち込む
+Deg:Fix 3
+"BP-X"?→X:"BP-Y"?→Y
+"HOUKOU"?→W
+"N"?→N
+11N+6→DimZ
+N→Z[1]
+0→Z
+"BP-IP"?→L
+Rec(L,W):X+I→E:Y+J→F
+For 1→M To N
+"R"?→R
+"IA"?→O
+"MUKI R=1 L=-1"?→T
+O×T→O
+R×tan(Abs(O)÷2)→T
+Rec(T,W):E-I→P:F-J→Q
+5M-3→S
+X→Z[S]:Y→Z[S+1]:W→Z[S+2]
+Pol(P-X,Q-Y):I→Z[S+3]:Z→Z[S+4]
+Z+I→Z
+O÷Abs(O)→U
+5N+6M+1→S
+Rec(R,W+90U):P+I→Z[S]:Q+J→Z[S+1]
+R→Z[S+2]:O→Z[S+3]:W+90U+180→Z[S+4]:Z→Z[S+5]
+Z+R×Abs(O)×π÷180→Z
+W+O→W
+Rec(T,W):E+I→X:F+J→Y
+"HOUKOU":W▸DMS◢
+If M<N:Then "IP-IP"?→L:Rec(L,W):E+I→E:F+J→F:Else "IP-EP"?→L:IfEnd
+Next
+5N+2→S
+X→Z[S]:Y→Z[S+1]:W→Z[S+2]:L-T→Z[S+3]:Z→Z[S+4]
+"EP KYORI":Z+L-T◢

@@ -1,0 +1,54 @@
+﻿'名前 線形と照合（右・左のずれ）
+'説明 測った点が、第何直線・第何曲線の、BP から何 m の所で、右か左に何 mm ずれているか
+'使い方 先に SENTEI で線形を入れておく
+'使い方 -FX-・-FY-：KAIHOU で出た点がそのまま出るので EXE
+'使い方 TYOKUSEN（第何直線）か KYOKUSEN（第何曲線）が出る
+'使い方 KYORI：BP からの距離
+'使い方 MIGI（右）か HIDARI（左）と、ずれ（mm）
+'使い方 どの区間の範囲にも入らないときは SOTO(HANI-GAI)
+'変数 X=測った点の X（KAIHOU の答え）
+'変数 Y=測った点の Y（KAIHOU の答え）
+'変数 N=曲線の数（Z[1] から）
+'変数 M=調べている区間の番号
+'変数 S=Z[ ] の番号
+'変数 Q=いちばん近い区間の目安
+'変数 O=ずれ（m・右が＋）
+'変数 L=BP からの距離
+'変数 P=区間（＋＝第何直線、−＝第何曲線）
+'変数 T=区間の中の位置
+'変数 R=この区間でのずれ
+'変数 W=範囲の中か外か
+'変数 U=曲線の向き（1／−1）
+'変数 E=計算用
+'変数 F=計算用
+'解説 KAIHOU の A〜D・G・H・K は使わないので、KAIHOU → SENKEI → KAIHOU と続けて使える
+'解説 区間の選び方は曲線総合プログラムと同じ（範囲内の曲線 → 範囲内の直線 → 範囲外）
+Deg:Fix 3
+"-FX-"?X:"-FY-"?Y
+Z[1]→N
+1ᴇ99→Q
+For 1→M To N
+5N+6M+1→S
+Pol(X-Z[S],Y-Z[S+1])
+Z[S+3]÷Abs(Z[S+3])→U
+(J-Z[S+4])×U→T
+T-360Int(T÷360)→T
+If T<0:Then T+360→T:IfEnd
+U×(Z[S+2]-I)→R
+8→W:If T≤Abs(Z[S+3])+1ᴇ-7:Then 0→W:IfEnd
+If 1000W+Abs(R)<Q:Then 1000W+Abs(R)→Q:R→O:Z[S+5]+Z[S+2]×T×π÷180→L:-M→P:IfEnd
+Next
+For 0→M To N
+5M+2→S
+X-Z[S]→E:Y-Z[S+1]→F
+E×cos(Z[S+2])+F×sin(Z[S+2])→T
+F×cos(Z[S+2])-E×sin(Z[S+2])→R
+9→W:If T≥0 And T≤Z[S+3]:Then 1→W:IfEnd
+If 1000W+Abs(R)<Q:Then 1000W+Abs(R)→Q:R→O:Z[S+4]+T→L:M+1→P:IfEnd
+Next
+If Q≥8000:Then "SOTO(HANI-GAI)"◢IfEnd
+If P>0:Then "TYOKUSEN":P◢Else "KYOKUSEN":Abs(P)◢IfEnd
+"KYORI":L◢
+Fix 1
+If O<0:Then "HIDARI(MM)":Abs(O)×1000◢Else "MIGI(MM)":O×1000◢IfEnd
+Fix 3

@@ -1,0 +1,16 @@
+﻿'名前 直線の右・左のずれ
+'説明 KAIHOU で出した点が、直線から右か左に何 m ずれているか
+'変数 T=直線の起点（IP）の X
+'変数 S=直線の起点（IP）の Y
+'変数 X=測った点の X
+'変数 Y=測った点の Y
+'変数 M=直線の方向角
+"IP-X"?T:"IP-Y"?S:?X:?Y
+X-T→H:Y-S→Z
+Pol(H,Z)
+cos⁻¹((H²+I²-Z²)÷(2×H×I))→L
+"IA"?M
+sin(L-M)×I→N
+If N<0:Then "HIDARI":Abs(N)
+Else "MIGI":Abs(N)
+IfEnd

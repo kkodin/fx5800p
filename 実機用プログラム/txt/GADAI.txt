@@ -1,0 +1,4 @@
+﻿"GAIKEI"?D:?H:"YAITA"?Y
+D÷2→T
+√(T²-(T-(H-Y))²)×2→W
+"HABA":W
