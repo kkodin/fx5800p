@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.16';
+  const VERSION = '1.4.17';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -1140,7 +1140,100 @@
       g.maxRow = Math.max(g.maxRow, y);
     }
   };
-  function startRun(p, from) {
+  // ---- SENTEI（線形を入れる）：現場名で保存・呼び出し（アプリだけ。実機にはない） --------
+  //   S.senteiSites：[{ name, inputs: [{ label, text, deg, shown }], savedAt }]、S.senteiLast：前回の入力
+  //   呼び出すと、聞かれた順（同じ名前は何回目か）で値を合わせる。「入れる」は全部そのまま、「確かめる」は 1 つずつ EXE
+  const isSentei = p => !!p && p.name === 'SENTEI';
+  const senteiKey = s => String(s || '').normalize('NFKC').trim().toLowerCase();
+  function senteiSites() { if (!Array.isArray(S.senteiSites)) S.senteiSites = []; return S.senteiSites; }
+  function senteiSummary(inputs) {
+    const pick = l => inputs.filter(e => e.label === l);
+    const num = e => e ? String(e.shown || e.text) : '―';
+    const parts = [];
+    const n = pick('N')[0];
+    parts.push('曲線 ' + num(n) + '　BP(' + num(pick('BP-X')[0]) + ', ' + num(pick('BP-Y')[0]) + ')　BP〜IP ' + num(pick('BP-IP')[0]));
+    const R = pick('R'), IA = pick('IA'), MK = pick('MUKI R=1 L=-1');
+    R.forEach((r, i) => parts.push('第' + (i + 1) + '曲線 R ' + num(r) + '　IA ' + num(IA[i]) + '　' + (MK[i] && Number(MK[i].text) < 0 ? '左' : '右')));
+    const ep = pick('IP-EP')[0];
+    if (ep) parts.push('IP〜EP ' + num(ep));
+    return parts;
+  }
+  const senteiDate = iso => { const d = new Date(iso); return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  function chooseSentei(p, from) {
+    const D = window.FxDialog, h = D.h;
+    const rows = [];
+    if (S.senteiLast && Array.isArray(S.senteiLast.inputs) && S.senteiLast.inputs.length) rows.push({ name: '前回の入力', last: true, inputs: S.senteiLast.inputs, savedAt: S.senteiLast.savedAt });
+    senteiSites().slice().sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt))).forEach(e => rows.push(e));
+    let dlg = null;
+    const go = (row, auto) => { dlg.close(); startRun(p, from, { preset: row.inputs, auto, name: row.last ? '' : row.name }); };
+    const list = h('ul', { class: 'sl-list' }, rows.map(row => h('li', {}, [
+      h('div', { class: 'sl-info' }, [h('b', { text: row.name + (row.savedAt ? '　' + senteiDate(row.savedAt) : '') }), ...senteiSummary(row.inputs).map(t => h('span', { text: t }))]),
+      h('div', { class: 'sl-btns' }, [
+        h('button', { type: 'button', class: 'dlg-btn primary', text: '入れる', title: '保存した値を全部そのまま入れる', onclick: () => go(row, true) }),
+        h('button', { type: 'button', class: 'dlg-btn', text: '確かめる', title: '保存した値を出し、1 つずつ EXE で入れる（直すこともできる）', onclick: () => go(row, false) }),
+        row.last ? null : h('button', { type: 'button', class: 'dlg-btn danger', text: '消す', onclick: async () => {
+          if (!await D.confirm('線形を消す', '「' + row.name + '」の線形を消します。元に戻せません。', '消す', 'danger')) return;
+          S.senteiSites = senteiSites().filter(e => e !== row); save();
+          dlg.close(); chooseSentei(p, from);
+        } })
+      ])
+    ])));
+    dlg = D.open({
+      title: '線形を入れる（SENTEI）', width: 560,
+      body: h('div', {}, [
+        h('p', { class: 'dlg-msg', text: rows.length
+          ? '保存した現場の線形を呼び出せます。「入れる」は全部そのまま、「確かめる」は値を出して 1 つずつ EXE（直すこともできます）。\n※ 保存・呼び出しはアプリだけ。実機では毎回入れます。'
+          : '保存した線形はまだありません。入れ終わると、現場名を付けて保存できます。\n※ 保存・呼び出しはアプリだけ。実機では毎回入れます。' }),
+        rows.length ? list : null
+      ]),
+      buttons: [{ label: 'やめる' }, { label: '新しく入れる', kind: rows.length ? '' : 'primary', onClick: () => { setTimeout(() => startRun(p, from, {}), 0); } }]
+    });
+  }
+  // 何回目の同じ名前か（R・IA などは曲線の数だけ聞かれる）で、呼び出した値を探す
+  function senteiPreset(token, label) {
+    if (!token.preset) return null;
+    const k = token.seen[label] || 0;
+    return token.preset.filter(e => e.label === label)[k] || null;
+  }
+  function noteInput(token, label, entry) {
+    token.seen[label] = (token.seen[label] || 0) + 1;
+    if (token.record) token.record.push({ label, text: String(entry.text), deg: entry.deg, shown: entry.shown });
+  }
+  function afterSentei(token) {
+    const inputs = token.record;
+    if (!inputs || !inputs.length) return;
+    S.senteiLast = { inputs, savedAt: new Date().toISOString() };
+    save();
+    const same = token.preset && token.preset.length === inputs.length
+      && token.preset.every((e, i) => e.label === inputs[i].label && Number(e.text) === Number(inputs[i].text));
+    if (same && token.presetName) { toast('「' + token.presetName + '」の線形を入れました'); return; }
+    const D = window.FxDialog; if (!D) return;
+    const h = D.h;
+    const name = h('input', { class: 'sl-name', type: 'text', value: token.presetName || '', placeholder: '例：館町下水 1〜2', maxlength: 40, autocomplete: 'off', 'aria-label': '現場名' });
+    D.open({
+      title: '線形を保存', width: 480,
+      body: h('div', {}, [
+        h('p', { class: 'dlg-msg', text: '入れた線形に現場名を付けて保存すると、次から SENTEI で呼び出せます。' }),
+        h('div', { class: 'sl-info' }, senteiSummary(inputs).map(t => h('span', { text: t }))),
+        name
+      ]),
+      buttons: [{ label: '保存しない' }, { label: '保存', kind: 'primary', onClick: async () => {
+        const nm = name.value.trim();
+        if (!nm) { toast('現場名を入れてください'); name.focus(); return false; }
+        const list = senteiSites(), old = list.find(e => senteiKey(e.name) === senteiKey(nm));
+        if (old && senteiKey(old.name) !== senteiKey(token.presetName)
+          && !await D.confirm('上書き', '「' + old.name + '」はもうあります。上書きしますか。', '上書き')) return false;
+        const entry = { name: nm, inputs, savedAt: new Date().toISOString() };
+        S.senteiSites = list.filter(e => e !== old).concat(entry);
+        save(); toast('「' + nm + '」の線形を保存しました');
+      } }]
+    });
+    setTimeout(() => name.focus(), 50);
+  }
+
+  function startRun(p, from, opt) {
+    // SENTEI は、保存した線形を呼び出すか選んでから始める（選んだら opt 付きでここへ戻る）
+    if (isSentei(p) && !opt && window.FxDialog) { chooseSentei(p, from); return; }
     if (run && !run.done) run.stopped = true;
     let gen;
     try {
@@ -1150,7 +1243,9 @@
         onAngle: a => { S.angle = a; }, onDisp: d => { S.disp = d; }
       });
     } catch (e) { showError(e, from === 'comp' ? 'comp' : 'runlist'); return; }
-    run = { gen, prog: p, from, grid: newGrid(), results: [], wait: null, done: false, stopped: false, inToks: [], inCur: 0 };
+    run = { gen, prog: p, from, grid: newGrid(), results: [], wait: null, done: false, stopped: false, inToks: [], inCur: 0,
+      preset: opt && Array.isArray(opt.preset) ? opt.preset : null, auto: !!(opt && opt.auto), presetName: (opt && opt.name) || '',
+      presetText: '', seen: {}, record: isSentei(p) ? [] : null };
     if (!p.name.startsWith('(')) S.lastProg = p.name;   // 変数のタブで、このプログラムの変数の名前を出す
     mode = 'run'; lastKeyCode = 0;
     pump();
@@ -1167,12 +1262,27 @@
           if (st.value && st.value.lastText) io.printValue(st.value.lastText);
           if (st.value && st.value.last) S.vars.Ans = st.value.last.value;
           save(); render();
+          if (token.record && !token.stopped) setTimeout(() => afterSentei(token), 50);
           return;
         }
         const ev = st.value;
         if (ev.type === 'tick') { render(); setTimeout(() => pump(), 0); return; }
         if (ev.type === 'input') {
+          // 呼び出した線形：「入れる」なら聞かずにそのまま入れる。合う値がない所からは 1 つずつ聞く
+          const pre = senteiPreset(token, ev.label);
+          if (pre && token.auto) {
+            io.print(ev.label + '? ' + (pre.shown || pre.text), false);
+            noteInput(token, ev.label, pre);
+            input = pre.text;
+            continue;
+          }
+          token.auto = false;
           token.wait = ev; token.inToks = []; token.inCur = 0; token.dms = startDms(ev);
+          token.presetText = '';
+          if (pre) {
+            if (token.dms) token.dms.previous = pre.deg != null ? pre.deg : Number(pre.text) * token.dms.scale;
+            else token.presetText = String(pre.text);
+          }
           token.coordinate = token.dms ? null : coordinateField(ev);
           if (token.grid.wide || token.coordinate) {
             // 見やすい表示：聞かれた行の「?」の右に入力し、変数の名前を右に小さく出す。前の入力・答えは上に残す
@@ -1180,19 +1290,22 @@
             const g = token.grid;
             token.inRow = g.row - 1;
             token.inPrefix = g.rows[token.inRow].join('').replace(/\s+$/, '') + ' ';
-            token.keepText = ev.keep ? ev.currentText : '';
+            token.keepText = ev.keep ? ev.currentText : token.presetText;
             if (g.wide) g.hints[token.inRow] = runHint();
             render(); return;
           }
           io.print(ev.label + '?', false);
-          const hasValue = ev.keep || token.dms;
-          if (hasValue) io.printValue(token.dms ? dmsDisplay(token.dms) : ev.currentText, false);
+          const hasValue = ev.keep || token.dms || token.presetText;
+          if (hasValue) io.printValue(token.dms ? dmsDisplay(token.dms) : ev.keep ? ev.currentText : token.presetText, false);
           else gridNewLine(token.grid);
           token.inRow = Math.min(token.grid.row - (hasValue ? 1 : 0), 3);
           if (!hasValue) token.grid.row = Math.min(token.grid.row, 3);
           render(); return;
         }
-        if (ev.type === 'pause') { token.wait = ev; render(); return; }
+        if (ev.type === 'pause') {
+          if (token.auto) continue;   // 呼び出した線形を全部そのまま入れるときは、途中の ◢ で止めない
+          token.wait = ev; render(); return;
+        }
       }
     } catch (e) {
       token.done = true; token.wait = null; save();
@@ -1261,6 +1374,9 @@
         if (!current.includes('.')) dms.parts[i] = (current || '0') + '.';
       } else if (i === 2 && current.includes('.')) {
         if (current.split('.')[1].length < 3) dms.parts[i] += id;
+      } else if (i === 0 && current.length === 2 && Number(current + id) >= 360) {
+        // 「563120」と続けて打ったとき：563° ではなく 56° とみて、3 は分の 1 桁目にする
+        dms.parts[1] = id; dms.part = 1;
       } else {
         dms.parts[i] = current.length >= DMS_WIDTH[i] ? id : current + id;
         if (i < 2 && dms.parts[i].length === DMS_WIDTH[i]) dms.part++;
@@ -1352,7 +1468,7 @@
     }
     if (run.wait && run.wait.type === 'input' && run.dms) {
       lines[run.inRow] = line('', { html: dmsControls(run.dms) });
-    } else if (run.wait && run.wait.type === 'input' && (run.inToks.length || !run.wait.keep)) {
+    } else if (run.wait && run.wait.type === 'input' && (run.inToks.length || (!run.wait.keep && !run.presetText))) {
       const t = run.inToks.join(''), cur = run.inToks.slice(0, run.inCur).join('').length;
       lines[run.inRow] = wrapWithCursor(t, cur, 1)[0];
     }
@@ -1404,11 +1520,13 @@
     const dms = run.dms;
     if (dms && id !== 'EXE' && id !== 'EXIT') { editDms(dms, id); return; }
     if (id === 'EXE') {
-      let text = run.inToks.join(''), shown = text || run.keepText || '';
+      let text = run.inToks.join(''), shown = text || run.keepText || '', degrees;
+      // 呼び出した線形の値が出ている所で、何も打たずに EXE ならその値
+      if (!text && !dms && run.presetText) { text = run.presetText; shown = text; }
       if (dms) {
         const invalid = dms.parts?.findIndex((value, i) => i > 0 && Number(value) >= 60);
         if (invalid > 0) { dms.part = invalid; toast(DMS_LABELS[invalid] + 'は 00〜59 の範囲で入力してください'); return; }
-        const degrees = dms.parts ? FxAngle.parse(dmsDisplay(dms).replace(/\.$/, '')) : dms.previous;
+        degrees = dms.parts ? FxAngle.parse(dmsDisplay(dms).replace(/\.$/, '')) : dms.previous;
         text = (degrees / dms.scale).toFixed(14);
         shown = dmsDisplay(dms).replace(/\.$/, '');
         if (!S.dmsInputs || typeof S.dmsInputs !== 'object' || Array.isArray(S.dmsInputs)) S.dmsInputs = {};
@@ -1418,6 +1536,12 @@
       }
       if (!text && !w.keep) return;
       try { if (text) E.evaluate(text, ctxComp()); } catch (e) { toast(e.message); return; }
+      if (run.record || run.preset) {
+        let saveText = text || String(w.current);
+        try { saveText = String(E.evaluate(saveText, ctxComp()).value); } catch (e) { /* そのまま */ }
+        noteInput(run, w.label, { text: saveText, deg: degrees, shown: degrees != null ? shown : String(+Number(saveText).toFixed(6)) });
+      }
+      run.presetText = '';
       const field = run.coordinate;
       const value = text ? Number(text) : w.current;
       const name = pointName(field, value);
