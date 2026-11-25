@@ -331,3 +331,33 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .calc.alpha-on .k-alpha .main { box-shadow: 0 0 0 2px #fff6, 0 3px 0 #050506; filter: brightness(1.15); }
 .nkeys .key.face-s .main, .nkeys .key.face-a .main { font-size: var(--k-alt, clamp(13px, 4.2vw, 19px)); }
 .fkeys .key.face-s .main, .fkeys .key.face-a .main { font-size: var(--k-alt, clamp(10px, 3vw, 14px)); }
+/* 曲線の測量：画面いっぱいの窓・ターゲットの入力表・トランシットの入れ替え表 */
+.dlg.dlg-full { left: 0; top: 0; transform: none; width: 100%; max-width: none; height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+.dlg-full .dlg-head { cursor: default; }
+.cv-zoomwrap { display: flex; flex-direction: column; gap: 6px; }
+.cv-zoombar { display: flex; gap: 6px; flex-wrap: wrap; }
+.cv-zoombar .dlg-btn { min-height: 36px; padding: 4px 12px; }
+.cv-svg.cv-zoom { display: block; width: 100%; height: min(62vh, 640px); min-height: 260px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.dlg-full .cv-table { font-size: 15px; }
+.cv-bottom { display: flex; justify-content: center; padding: 8px 0 4px; }
+.cv-bottom .dlg-btn { min-width: 50%; min-height: 48px; font-size: 17px; }
+.cv-big { font-size: 16px; }
+.cv-confirm .cv-table.cv-big { font-size: 17px; }
+.cv-sum { margin-bottom: 6px; }
+.cv-sum td:first-child { color: #aab; }
+.cv-form { display: flex; flex-direction: column; gap: 8px; }
+.cv-st { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.cv-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cv-cell > span:first-child { min-width: 3em; color: #aab; font-size: 13px; }
+.cv-st .cv-cell > span:first-child { min-width: 5.5em; }
+.cv-in { flex: 1 1 7em; min-width: 6em; max-width: 12em; padding: 7px 8px; font-size: 17px; font-variant-numeric: tabular-nums; border-radius: 8px; border: 1px solid #4a4e55; background: #1f2126; color: #eee; }
+.cv-in:focus { outline: 2px solid #e0a12a; border-color: #e0a12a; }
+.cv-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 10px; border-bottom: 3px double #6a6e75; }
+.cv-rowname { font-weight: 700; color: #ffd27a; }
+.cv-ashow { font-size: 13px; color: #8fc3ff; font-variant-numeric: tabular-nums; }
+.cv-out { font-weight: 700; color: #ffd27a; font-size: 16px; }
+.cv-xy { font-size: 12px; color: #aab; font-variant-numeric: tabular-nums; }
+.cv-msg { margin: 0; color: #ff8a80; min-height: 1.2em; }
+.cv-zoom .cv-label { font-size: 13px; }
+.cv-zoom .cv-tick { font-size: 11px; }
+@media (max-width: 560px) { .cv-st { grid-template-columns: 1fr; } }

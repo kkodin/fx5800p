@@ -59,7 +59,8 @@
     const head = h('div', { class: 'dlg-head' }, [titleEl, btns]);
     const body = h('div', { class: 'dlg-body' }, opt.body);
     const box = h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': opt.title || '' }, [head, body]);
-    if (opt.width) box.style.maxWidth = opt.width + 'px';
+    if (opt.full) box.classList.add('dlg-full');          // 画面いっぱい（動かさない）
+    else if (opt.width) box.style.maxWidth = opt.width + 'px';
     back.append(box);
     let closed = false;
     function close() {
@@ -94,7 +95,7 @@
     }
     function clamp() { if (pos) place(pos.x, pos.y); }
     head.addEventListener('pointerdown', e => {
-      if (e.target.closest('button,input,select,textarea,a')) return;
+      if (opt.full || e.target.closest('button,input,select,textarea,a')) return;
       const r = box.getBoundingClientRect();
       drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
       head.setPointerCapture(e.pointerId); head.classList.add('dragging');
