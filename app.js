@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.19';
+  const VERSION = '1.4.20';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -436,8 +436,10 @@
     }
     const hasDesc = m.items.some(it => it.desc || it.help || it.title);
     const showDesc = hasDesc && S.showDesc !== false;
-    const short = !showDesc && m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9);
-    const items = m.items.map((it, i) =>
+    const short = !showDesc && m.items.length > 6 && m.items.every(it => Array.from(it.label).length <= 9 && !it.head);
+    // it.head：その項目の前に出す見出し（アプリ版／電卓実機併用 の区切り）
+    const items = m.items.map((it, i) => (it.head ? '<div class="mgroup' + (it.headClass ? ' ' + it.headClass : '') + '"><b>' + esc(it.head) + '</b>'
+      + (it.headNote ? '<span>' + esc(it.headNote) + '</span>' : '') + '</div>' : '') +
       '<div class="mrow' + (showDesc ? ' desc' : '') + '"><button type="button" class="mi' + (i === m.sel ? ' sel' : '') + '" data-tap="' + i + '">' +
       (m.numbered && i < 9 ? '<span class="no">' + (i + 1) + '</span>' : '') + '<span class="lbw">'
       + (showDesc && it.title ? '<span class="tt">' + esc(it.title) + '</span><span class="lb sub">' + esc(it.label) + '</span>' : '<span class="lb">' + esc(it.label) + '</span>')
@@ -964,6 +966,7 @@
         toast(FxProgInfo.report(r), 9000);
         openProgList('RUN');
       } },
+      { label: 'APP アプリ版プログラム', act: () => openProgList('RUN', APP_PROGRAMS[0].key) },
       { label: 'BACKUP 全保存', act: backupAll },
       { label: 'RESTORE 全復元', act: () => pickFile('backup') }
     ], { back: () => { mode = 'comp'; } });
@@ -985,6 +988,13 @@
         else if (kind === 'CCL') { exportCcl(p); }
       }
     }));
+    // 実行の一覧は、アプリ版プログラム（このアプリだけ）と電卓実機併用プログラムを分けて並べる
+    if (kind === 'RUN') {
+      if (items.length) Object.assign(items[0], { head: '電卓実機併用プログラム', headNote: 'fx-5800P の実機でも動く（CCL で実機へ送れる）', headClass: 'mg-calc' });
+      items.unshift(...APP_PROGRAMS.map((a, i) => ({ label: a.label + '（アプリ版）', key: a.key, title: a.title, desc: a.desc,
+        ...(i === 0 ? { head: 'アプリ版プログラム', headNote: 'このアプリだけで動く。実機・電卓の変数・ほかのプログラムとは別', headClass: 'mg-app' } : {}),
+        act: () => a.open(() => openProgList('RUN', a.key)) })));
+    }
     if (kind === 'EXPORT' && list.length) items.unshift({ label: '全部まとめて(txt)', act: () => { for (const p of list) exportProgram(p); } });
     if (kind === 'DELETE' && list.length) items.push({ label: 'All Files 全削除', act: () => askConfirm('全プログラム ' + list.length + ' 本を削除しますか', () => { S.programs = []; save(); toast('全部削除しました'); openProgMenu(); }, () => openProgList('DELETE')) });
     openMenu(title, items, { numbered: false, back: openProgMenu });
@@ -1206,15 +1216,12 @@
     save();
     const same = token.preset && token.preset.length === inputs.length
       && token.preset.every((e, i) => e.label === inputs[i].label && Number(e.text) === Number(inputs[i].text));
-    // 保存の窓を閉じたら（出さないときはすぐ）、測量をするか聞く
-    let site = token.presetName || '';
-    const next = () => { if (run === token && !token.stopped) startSurvey(alignFromInputs(inputs), token.grid, site); };
-    if (same && token.presetName) { toast('「' + token.presetName + '」の線形を入れました'); next(); return; }
-    const D = window.FxDialog; if (!D) { next(); return; }
+    if (same && token.presetName) { toast('「' + token.presetName + '」の線形を入れました'); return; }
+    const D = window.FxDialog; if (!D) return;
     const h = D.h;
     const name = h('input', { class: 'sl-name', type: 'text', value: token.presetName || '', placeholder: '例：館町下水 1〜2', maxlength: 40, autocomplete: 'off', 'aria-label': '現場名' });
     D.open({
-      title: '線形を保存', width: 480, onClose: () => setTimeout(next, 0),
+      title: '線形を保存', width: 480,
       body: h('div', {}, [
         h('p', { class: 'dlg-msg', text: '入れた線形に現場名を付けて保存すると、次から SENTEI で呼び出せます。' }),
         h('div', { class: 'sl-info' }, senteiSummary(inputs).map(t => h('span', { text: t }))),
@@ -1228,30 +1235,37 @@
           && !await D.confirm('上書き', '「' + old.name + '」はもうあります。上書きしますか。', '上書き')) return false;
         const entry = { name: nm, inputs, savedAt: new Date().toISOString() };
         S.senteiSites = list.filter(e => e !== old).concat(entry);
-        site = nm;
         save(); toast('「' + nm + '」の線形を保存しました');
       } }]
     });
     setTimeout(() => name.focus(), 50);
   }
 
-  // ---- 曲線の測量（SENTEI のあと。アプリだけ・実機との互換は考えない） ----------------
-  //   トランシット（0）：KAIHOU と同じ開放トラバース。測った点を照合し、機械点を進める（BX←OX、OX←FX）
-  //   ターゲット（1）：数（1〜10）を決め、1 点ずつ測って照合。終わったら図と管の次回予測（曲線総合プログラムと同じ）
-  //   変数は KAIHOU と同じ A・B＝後視点、C・D＝機械点、G＝距離、H＝角度。測った点は X・Y（そのまま SENKEI にも使える）
-  const SURVEY_PROG = { name: '(曲線測量)', mode: 'COMP', source: [
-    "'名前 曲線の測量（SENTEI の線形と照合）",
-    "'変数 A=後視点の X、B=後視点の Y、C=機械点の X、D=機械点の Y、G=水平距離、H=水平角（後視点を 0）、N=ターゲットの数、X=測った点の X、Y=測った点の Y"
-  ].join('\n') };
-  // 測量結果の記録（S.surveyRecords）。名前は「日付 時刻 管No.管番号」。BACKUP にそのまま入る
-  function saveSurveyRecord(rec) {
-    if (!Array.isArray(S.surveyRecords)) S.surveyRecords = [];
-    const d = new Date(), z = v => String(v).padStart(2, '0');
-    const when = d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
-    const name = when + ' 管No.' + rec.pipeNo;
-    S.surveyRecords.push(Object.assign({ name, savedAt: d.toISOString() }, rec));
-    save(); toast('測量結果を保存しました：' + name);
-    return name;
+  // ---- アプリ版プログラム（このアプリだけで動く。電卓実機・電卓の変数・ほかのプログラムとは絡まない） ----
+  //   曲線の測量（curveapp.js）。データは S.curveApp だけに置く（BACKUP に入る）
+  const APP_PROGRAMS = [
+    { key: '(曲線の測量)', label: '曲線の測量', title: '曲線の測量（推進管）',
+      desc: '線形を入れ、トランシット・ターゲットを測って左右誤差、図、推進管の次回予測、記録。電卓の変数は使わない',
+      open: back => openCurveApp(back) }
+  ];
+  function curveAppState() {
+    if (!S.curveApp || typeof S.curveApp !== 'object') S.curveApp = {};
+    const st = S.curveApp;
+    if (!Array.isArray(st.aligns)) st.aligns = [];
+    if (!Array.isArray(st.records)) st.records = [];
+    // v1.4.20 で S.surveyRecords に保存した記録は、こちらへ移す
+    if (Array.isArray(S.surveyRecords) && S.surveyRecords.length) { st.records = st.records.concat(S.surveyRecords); delete S.surveyRecords; save(); }
+    return st;
+  }
+  function openCurveApp(back) {
+    if (!window.FxCurveApp || !window.FxDialog) { toast('曲線の測量を読めませんでした'); return; }
+    FxCurveApp.open({
+      state: curveAppState, save, toast,
+      download: (name, text) => { download(name, '﻿' + text, 'text/csv'); toast('CSV を書き出しました'); },
+      // SENTEI で保存した線形を写して使えるようにする（写すだけ。あとは別々）
+      senteiAligns: () => senteiSites().map(e => ({ name: e.name, align: alignFromInputs(e.inputs) })),
+      onClose: back
+    });
   }
   // SENTEI で入れた値（聞かれた順）から、線形（senkei.js の形）を作る
   function alignFromInputs(inputs) {
@@ -1264,80 +1278,6 @@
       curves.push({ R: R[i], ia: Math.abs(IA[i] || 0), dir: sign < 0 ? 'L' : 'R', L: i ? (IPIP[i - 1] || 0) : 0 });
     }
     return { bp: { x: nums('BP-X')[0] || 0, y: nums('BP-Y')[0] || 0 }, az: degs('HOUKOU')[0] || 0, L0: nums('BP-IP')[0] || 0, curves, Lf: nums('IP-EP')[0] || 0 };
-  }
-  const f3 = v => (Math.round(v * 1000) / 1000).toFixed(3);
-  // 照合の答えを「第1曲線 右 36mm」に
-  function sideText(j) {
-    if (!j) return '線形がありません';
-    const mm = Math.round(Math.abs(j.offset) * 1000);
-    return j.name.replace(/\s*[左右]$/, '') + '　' + (mm === 0 ? '中心' : (j.offset > 0 ? '右 ' : '左 ') + mm + 'mm') + (j.priority >= 8 ? '（範囲外）' : '');
-  }
-  function* surveyGen(align, site) {
-    const g = FxSenkei.build(align), V = S.vars;
-    const judge = p => FxSenkei.judge(g, p);
-    // 値を聞く。keep なら前の値のまま EXE で進む
-    function* ask(label, target, opt = {}) {
-      for (;;) {
-        const cur = target ? (Number(V[target]) || 0) : 0;
-        const raw = yield { type: 'input', label, keep: !!opt.keep, current: cur, currentText: E.formatNumber(cur, { mode: 'Fix', n: 3 }), angle: 'Deg', prog: SURVEY_PROG.name, target };
-        if ((raw === '' || raw == null) && opt.keep) return cur;
-        if (raw === '' || raw == null) continue;
-        let v;
-        try { v = E.evaluate(raw, ctxComp()).value; } catch (e) { io.print(e.message || 'ERROR'); continue; }
-        if (opt.check && !opt.check(v)) { io.print(opt.msg); continue; }
-        if (target) V[target] = v;
-        return v;
-      }
-    }
-    // 後視点・機械点・距離・角度から測った点の座標（KAIHOU と同じ：後視点の方向を 0）
-    function* measure() {
-      yield* ask('BX', 'A', { keep: true }); yield* ask('BY', 'B', { keep: true });
-      yield* ask('OX', 'C', { keep: true }); yield* ask('OY', 'D', { keep: true });
-      const d = yield* ask('KYORI', 'G');
-      const h = yield* ask('KAKUDO', 'H');
-      const az = Math.atan2(V.B - V.D, V.A - V.C) + h * Math.PI / 180;
-      const p = { x: V.C + d * Math.cos(az), y: V.D + d * Math.sin(az) };
-      V.X = p.x; V.Y = p.y;
-      return p;
-    }
-    const zeroOne = { check: v => v === 0 || v === 1, msg: '0 か 1 を入れてください' };
-    io.print('測量をしますか？');
-    if ((yield* ask('YES=0 NO=1', null, zeroOne)) === 1) return;
-    for (;;) {
-      io.print('何を測量しますか？（EXIT で終わり）');
-      if ((yield* ask('ターゲット=1 トランシット=0', null, zeroOne)) === 0) {
-        io.print('― トランシット ―');
-        const p = yield* measure(), j = judge(p);
-        io.print('-FX-'); io.printValue(f3(p.x));
-        io.print('-FY-'); io.printValue(f3(p.y));
-        io.print('左右誤差　' + sideText(j));
-        // 開放トラバース：機械点を後視点に、測った点を機械点にする。入れ替えた値は表で見せる
-        const before = { A: V.A, B: V.B, C: V.C, D: V.D };
-        V.A = V.C; V.B = V.D; V.C = p.x; V.D = p.y;
-        io.print('トランシットを進めました（BX←OX、OX←FX）');
-        save();
-        yield { type: 'transit', data: { p, side: sideText(j), before, after: { A: V.A, B: V.B, C: V.C, D: V.D } } };
-        continue;
-      }
-      const n = yield* ask('ターゲットの数 1〜10', 'N', { check: v => Number.isInteger(v) && v >= 1 && v <= 10, msg: '1〜10 の整数を入れてください' });
-      // 距離・角度は表の窓でまとめて入れる（確かめ・図・保存まで窓の中）。やめたら null
-      const r = yield { type: 'targets', data: { g, n, site, start: { bx: Number(V.A) || 0, by: Number(V.B) || 0, ox: Number(V.C) || 0, oy: Number(V.D) || 0 } } };
-      if (!r) { io.print('ターゲットの入力をやめました'); continue; }
-      V.A = r.bx; V.B = r.by; V.C = r.ox; V.D = r.oy;
-      r.pts.forEach((p, i) => io.print(p.name + '　' + sideText(p.j)));
-      if (r.pred) io.print('次回予測　' + sideText(r.pred.j));
-      const last = r.pts[r.pts.length - 1];
-      if (last) { V.G = last.d; V.H = last.h; V.X = last.x; V.Y = last.y; }
-      if (r.saved) io.print('保存しました：' + r.saved);
-      save();
-    }
-  }
-  function startSurvey(align, grid, site) {
-    if (run && !run.done) run.stopped = true;
-    run = { gen: surveyGen(align, site || ''), prog: SURVEY_PROG, align, site: site || '', from: 'list', grid: grid || newGrid(), results: [], wait: null, done: false, stopped: false,
-      inToks: [], inCur: 0, preset: null, auto: false, presetName: '', presetText: '', seen: {}, record: null };
-    mode = 'run'; lastKeyCode = 0;
-    pump(); render();
   }
 
   function startRun(p, from, opt) {
@@ -1414,15 +1354,6 @@
         if (ev.type === 'pause') {
           if (token.auto) continue;   // 呼び出した線形を全部そのまま入れるときは、途中の ◢ で止めない
           token.wait = ev; render(); return;
-        }
-        if (ev.type === 'transit' || ev.type === 'targets') {
-          // 曲線の測量：トランシットの入れ替えの表／ターゲットの入力表（→確かめ→図→保存）。閉じたら続き（何を測量しますか？）へ
-          if (!window.FxCurveView) { input = null; continue; }
-          token.wait = ev; render();
-          const back = r => { if (run === token && !token.stopped) { token.wait = null; pump(r); } };
-          if (ev.type === 'transit') FxCurveView.transit(ev.data, () => back());
-          else FxCurveView.survey(Object.assign({}, ev.data, { onSave: saveSurveyRecord }), back);
-          return;
         }
       }
     } catch (e) {
@@ -1627,17 +1558,15 @@
     const id = k.id;
     if (run.done) {
       if (id === 'EXE') {
-        if (run.prog === SURVEY_PROG) return startSurvey(run.align, null, run.site);   // 曲線の測量をもう一度
         if (run.from === 'comp') { mode = 'comp'; comp.shown = { value: S.vars.Ans, how: 'norm', label: comp.toks.join('') }; return; } return startRun(run.prog, run.from);
       }
-      if (id === 'EXIT' || id === 'AC') { if (run.from === 'comp') { mode = 'comp'; comp.shown = { value: S.vars.Ans, how: 'norm', label: comp.toks.join('') }; } else openProgList('RUN', run.prog === SURVEY_PROG ? 'SENTEI' : run.prog.name); run = null; return; }
+      if (id === 'EXIT' || id === 'AC') { if (run.from === 'comp') { mode = 'comp'; comp.shown = { value: S.vars.Ans, how: 'norm', label: comp.toks.join('') }; } else openProgList('RUN', run.prog.name); run = null; return; }
       return;
     }
     if (id === 'AC') { run.stopped = true; run.done = true; run.wait = null; io.print('Break', false); save(); return; }
     const w = run.wait;
     if (!w) { lastKeyCode = k.code || 0; return; } // 実行中：Getkey 用に記録するだけ
     if (w.type === 'pause') { if (id === 'EXE') { run.wait = null; pump(); } return; }
-    if (w.type === 'transit' || w.type === 'targets') return;   // 測量の窓を開いている間
     // 入力待ち
     const dms = run.dms;
     if (dms && id !== 'EXE' && id !== 'EXIT') { editDms(dms, id); return; }

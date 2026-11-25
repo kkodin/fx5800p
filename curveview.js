@@ -194,13 +194,13 @@
     const note = data.pred
       ? '次回予測：1 本目と 2 本目の折れ角（' + data.pred.bend.toFixed(4) + '°）のまま、測点1〜測点3 の距離（' + f3(data.pred.len) + ' m）だけ進んだ位置。曲線総合プログラムと同じ求め方です。'
       : '次回予測は、測点を 4 つ（1 本目の前・後、2 本目の前・後）測ったときに出ます。';
-    const kids = [views, h('div', { class: 'cv-tablewrap' }, [table]), h('p', { class: 'cv-note', text: note })];
+    const kids = [opt.before || null, views, h('div', { class: 'cv-tablewrap' }, [table]), h('p', { class: 'cv-note', text: note })].filter(Boolean);
     let dlg = null;
     if (opt.full) kids.push(h('div', { class: 'cv-bottom' }, [h('button', { type: 'button', class: 'dlg-btn primary', text: '閉じる', onclick: () => dlg.close() })]));
     dlg = D.open({
-      title: '曲線の測量　結果', width: 760, full: !!opt.full,
+      title: opt.title || '曲線の測量　結果', width: 760, full: !!opt.full,
       body: h('div', { class: 'cv-body' }, kids),
-      buttons: [{ label: '閉じる', kind: 'primary' }],
+      buttons: (opt.buttons || []).concat([{ label: '閉じる', kind: 'primary' }]),
       onClose
     });
     return dlg;
@@ -326,7 +326,7 @@
       el.addEventListener('keydown', e => {
         if (e.isComposing) return;
         if (e.key === 'Enter') {
-          e.preventDefault();
+          e.preventDefault(); e.stopPropagation();
           if (el === lastField) { if (check()) confirmView(); return; }
           order[k + 1].focus(); order[k + 1].select();
         } else if (e.key === 'ArrowUp' && k > 0) { e.preventDefault(); order[k - 1].focus(); order[k - 1].select(); }
@@ -403,17 +403,95 @@
           if (!no) { pipe.focus(); pipe.placeholder = '管番号を入れてください'; return false; }
           const jr = j => j ? { section: secName(j), offsetMm: Math.round(j.offset * 1000), fromBP: j.distFromBP } : null;
           result.saved = opt.onSave ? opt.onSave({
-            pipeNo: no, site: opt.site || '',
+            pipeNo: no, site: opt.site || '', align: opt.align || null,
             backsight: { x: st.bx, y: st.by }, station: { x: st.ox, y: st.oy },
             points: pts.map(p => Object.assign({ name: p.name, d: p.d, h: p.h, angle: fmtAngle(p.h), x: p.x, y: p.y }, jr(p.j))),
             pred: pred ? Object.assign({ x: pred.x, y: pred.y, bend: pred.bend, len: pred.len }, jr(pred.j)) : null
           }) : '';
         } }]
       });
-      pipe.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); pipe.closest('.dlg').querySelector('.dlg-btn.primary').click(); } });
+      pipe.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); pipe.closest('.dlg').querySelector('.dlg-btn.primary').click(); } });
       setTimeout(() => pipe.focus(), 50);
     }
   }
 
-  root.FxCurveView = { open, alignmentPaths, transit, survey, parseAngle, fmtAngle };
+  // ---- 保存した測量の記録：一覧 → 中身（図と表・CSV）・消す ----
+  //   opt：{ list() → 記録の配列（新しい順）, remove(rec), download(name, text), onClose }
+  const mmOf = v => !Number.isFinite(v) ? '―' : v === 0 ? '中心' : (v > 0 ? '右 ' : '左 ') + Math.abs(v) + ' mm';
+  function recordCsv(rec) {
+    const q = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const lines = [['名前', rec.name], ['現場', rec.site || ''], ['管番号', rec.pipeNo],
+      ['後視点 X', f3(rec.backsight.x)], ['後視点 Y', f3(rec.backsight.y)], ['機械点 X', f3(rec.station.x)], ['機械点 Y', f3(rec.station.y)], [],
+      ['測点', '距離', '角度', 'X', 'Y', '区間', '左右誤差(mm)', 'BPから']];
+    for (const p of rec.points) lines.push([p.name, f3(p.d), p.angle, f3(p.x), f3(p.y), p.section || '', p.offsetMm, Number.isFinite(p.fromBP) ? f3(p.fromBP) : '']);
+    if (rec.pred) lines.push(['次回予測', '', '', f3(rec.pred.x), f3(rec.pred.y), rec.pred.section || '', rec.pred.offsetMm, Number.isFinite(rec.pred.fromBP) ? f3(rec.pred.fromBP) : '']);
+    return lines.map(l => l.map(q).join(',')).join('\r\n') + '\r\n';
+  }
+  function records(opt) {
+    const D = root.FxDialog, h = D.h;
+    const all = opt.list();
+    let dlg = null, goingOn = false;
+    const reopen = () => setTimeout(() => records(opt), 0);
+    const view = rec => { goingOn = true; dlg.close(); showRecord(rec, opt, reopen); };
+    const items = all.map(rec => {
+      const pts = rec.points || [];
+      return h('li', {}, [
+        h('div', { class: 'sl-info' }, [
+          h('b', { text: rec.name }),
+          h('span', { text: (rec.site ? rec.site + '　' : '') + pts.length + ' 点' }),
+          h('span', { text: pts.map(p => p.name + ' ' + mmOf(p.offsetMm)).join('　') + (rec.pred ? '　予測 ' + mmOf(rec.pred.offsetMm) : '') })
+        ]),
+        h('div', { class: 'sl-btns' }, [
+          h('button', { type: 'button', class: 'dlg-btn primary', text: '見る', onclick: () => view(rec) }),
+          h('button', { type: 'button', class: 'dlg-btn danger', text: '消す', onclick: async () => {
+            if (!await D.confirm('記録を消す', '「' + rec.name + '」を消します。元に戻せません。', '消す', 'danger')) return;
+            opt.remove(rec); goingOn = true; dlg.close(); reopen();
+          } })
+        ])
+      ]);
+    });
+    dlg = D.open({
+      title: '曲線の測量の記録', width: 600,
+      body: h('div', {}, [
+        h('p', { class: 'dlg-msg', text: all.length ? '保存した測量の結果です（新しい順）。「見る」で図と表、CSV の書き出しができます。BACKUP にも入っています。' : 'まだ記録はありません。ターゲットの測量で図を閉じたあと、管番号を入れて保存すると、ここに出ます。' }),
+        all.length ? h('ul', { class: 'sl-list' }, items) : null
+      ]),
+      buttons: [{ label: '閉じる', kind: 'primary' }],
+      onClose: () => { if (!goingOn && opt.onClose) setTimeout(opt.onClose, 0); }
+    });
+  }
+  function showRecord(rec, opt, back) {
+    const D = root.FxDialog, h = D.h, K = root.FxSenkei;
+    const title = rec.name + (rec.site ? '（' + rec.site + '）' : '');
+    const head = h('div', { class: 'cv-body' }, [
+      h('p', { class: 'cv-big', text: '後視点 BX ' + f3(rec.backsight.x) + '　BY ' + f3(rec.backsight.y) + '　／　機械点 OX ' + f3(rec.station.x) + '　OY ' + f3(rec.station.y) }),
+      h('div', { class: 'cv-tablewrap' }, [h('table', { class: 'cv-table' }, [
+        h('thead', {}, [h('tr', {}, ['測点', '距離', '角度', 'FX', 'FY', '区間', '左右誤差'].map(t => h('th', { text: t })))]),
+        h('tbody', {}, rec.points.map(p => h('tr', {}, [h('td', { text: p.name }), h('td', { text: f3(p.d) }), h('td', { text: p.angle || fmtAngle(p.h) }),
+          h('td', { text: f3(p.x) }), h('td', { text: f3(p.y) }), h('td', { text: p.section || '―' }), h('td', { class: 'cv-mm', text: mmOf(p.offsetMm) })]))
+          .concat(rec.pred ? [h('tr', { class: 'cv-predrow' }, [h('td', { text: '次回予測' }), h('td', {}), h('td', {}), h('td', { text: f3(rec.pred.x) }), h('td', { text: f3(rec.pred.y) }),
+            h('td', { text: rec.pred.section || '―' }), h('td', { class: 'cv-mm', text: mmOf(rec.pred.offsetMm) })])] : []))
+      ])])
+    ]);
+    const csvName = (rec.name + (rec.site ? '_' + rec.site : '')).replace(/[\s:]/g, '_') + '.csv';
+    const buttons = [{ label: 'CSV', onClick: () => { opt.download(csvName, recordCsv(rec)); return false; } }];
+    // 線形も残っている記録は図も出す。照合は記録の座標で計算し直す（同じ式なので同じ答え）
+    if (rec.align && K) {
+      const g = K.build(rec.align);
+      const pts = rec.points.map(p => ({ name: p.name, x: p.x, y: p.y, j: K.judge(g, p) }));
+      const pred = rec.pred ? Object.assign({}, rec.pred, { j: K.judge(g, rec.pred) }) : null;
+      open({ g, pts, pred }, back, { full: true, title, before: head, buttons });
+      return;
+    }
+    let dlg = null;
+    dlg = D.open({
+      title, full: true,
+      body: h('div', { class: 'cv-body' }, [head, h('p', { class: 'cv-note', text: 'この記録には線形が入っていないので、図は出せません（v1.4.19 で保存したもの）。' }),
+        h('div', { class: 'cv-bottom' }, [h('button', { type: 'button', class: 'dlg-btn primary', text: '閉じる', onclick: () => dlg.close() })])]),
+      buttons: buttons.concat([{ label: '閉じる', kind: 'primary' }]),
+      onClose: back
+    });
+  }
+
+  root.FxCurveView = { open, alignmentPaths, transit, survey, records, recordCsv, parseAngle, fmtAngle, pointFrom, sideLine };
 })(typeof window !== 'undefined' ? window : globalThis);
