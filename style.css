@@ -296,7 +296,29 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .sl-info span { display: block; font-size: 12px; color: #aab; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .sl-btns { display: flex; gap: 6px; margin-left: auto; }
 .sl-btns .dlg-btn { min-height: 36px; padding: 4px 10px; }
-.sl-name { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 8px; font-size: 16px; border-radius: 8px; border: 1px solid #4a4e55; background: #1f2126; color: #eee; }
+/* 曲線の測量の結果（curveview.js） */
+.cv-body { display: flex; flex-direction: column; gap: 8px; }
+.cv-views { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.cv-svg { width: min(340px, 100%); height: auto; background: #f7f7f2; border: 1px solid #4a4e55; border-radius: 6px; }
+.cv-grid { stroke: #d6d6cc; stroke-width: 1; }
+.cv-tick { font-size: 9px; fill: #888; }
+.cv-al { fill: none; stroke: #3b82d6; stroke-width: 2.2; }
+.cv-ip { fill: none; stroke: #c0392b; stroke-width: 1.6; }
+.cv-pipe { fill: none; stroke: #222; stroke-width: 1.6; stroke-dasharray: 3 3; }
+.cv-predline { fill: none; stroke: #1e9e4a; stroke-width: 1.6; stroke-dasharray: 6 4; }
+.cv-pt { fill: #fff; stroke: #222; stroke-width: 2; }
+.cv-pred { fill: #2ecc71; stroke: #146b33; stroke-width: 2; }
+.cv-label { font-size: 11px; fill: #1b3a8a; font-weight: 700; paint-order: stroke; stroke: #f7f7f2; stroke-width: 3px; }
+.cv-title { font-size: 14px; font-weight: 700; text-anchor: middle; fill: #222; }
+.cv-north { font-size: 10px; text-anchor: end; fill: #666; }
+.cv-tablewrap { overflow-x: auto; }
+.cv-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cv-table th, .cv-table td { padding: 4px 6px; border-bottom: 1px solid #3a3d43; text-align: right; white-space: nowrap; }
+.cv-table th:first-child, .cv-table td:first-child, .cv-table td:nth-child(4) { text-align: left; }
+.cv-table .cv-mm { font-weight: 700; color: #ffd27a; }
+.cv-predrow td { color: #8ff0b0; }
+.cv-note { margin: 0; font-size: 12px; color: #aab; line-height: 1.5; }
+.sl-name {width: 100%; box-sizing: border-box; margin-top: 8px; padding: 8px; font-size: 16px; border-radius: 8px; border: 1px solid #4a4e55; background: #1f2126; color: #eee; }
 
 /* SHIFT・ALPHA が有効な間のキーの表記 */
 .key.face-s .main { color: #ffc94d !important; }
