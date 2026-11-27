@@ -46,12 +46,20 @@
     if (scr === 'alignEdit' && alEdit) return alEdit.fields[alEdit.sel] || null;
     if (scr === 'transit' && trSt) return trSt.fields[trSt.sel] || null;
     if (scr === 'targetTable' && tgSt) return tgSt.fields[tgSt.sel] || null;
+    if (scr === 'targetConfirm' && tgSt && tgSt.predEditing) return { kind: 'num', get: () => tgSt.predLen, set: v => { tgSt.predLen = v; calcPreds(); } };
     if (scr === 'pipeNo' && pipeSt) return { kind: 'text', get: () => pipeSt.no, set: v => { pipeSt.no = v; } };
     return null;
   }
   function draftState() {
     if (scr === 'transit' && trSt) return trSt;
     if (scr === 'targetTable' && tgSt) return tgSt;
+    if (scr === 'targetConfirm' && tgSt && tgSt.predEditing) return {
+      hasPrev: tgSt.predHasPrev,
+      get draft() { return tgSt.predDraft; },
+      set draft(v) { tgSt.predDraft = v; },
+      fields: [activeField()],
+      sel: 0
+    };
     return null;
   }
   function initCellDraft(ds) {
@@ -257,6 +265,26 @@
     const p = Vw.pointFrom(s, dv, deg), j = root.FxSenkei.judge(t.g, p);
     r.res = { name: r.name, d: dv, h: deg, x: p.x, y: p.y, j };
   }
+  function calcPreds() {
+    const t = tgSt;
+    if (!t) return;
+    t.preds = []; t.pred = null;
+    const pts = t.rows.map(r => r.res);
+    if (pts.length < 4 || pts.some(p => !p)) return;
+    const base = root.FxSenkei.predict(pts[0], pts[1], pts[2], pts[3]);
+    const stepLen = num(t.predLen);
+    const L = (Number.isFinite(stepLen) && stepLen > 0) ? stepLen : base.len;
+    const cnt = Math.max(1, Math.min(5, Number(t.predCount) || 1));
+    const RAD = Math.PI / 180;
+    let cx = pts[0].x, cy = pts[0].y;
+    for (let k = 1; k <= cnt; k++) {
+      const dir = (base.dir1 + k * base.bend) * RAD;
+      cx += L * Math.cos(dir);
+      cy += L * Math.sin(dir);
+      t.preds.push({ step: k, x: cx, y: cy, len: L, bend: base.bend, j: root.FxSenkei.judge(t.g, { x: cx, y: cy }) });
+    }
+    t.pred = t.preds[0] || null;
+  }
   function checkTargetTable() {
     const t = tgSt, s = stationOfTarget();
     if (!Object.values(s).every(Number.isFinite) || (s.bx === s.ox && s.by === s.oy)) {
@@ -273,17 +301,20 @@
       }
     }
     const pts = t.rows.map(r => r.res);
-    t.pred = null;
+    t.pred = null; t.preds = []; t.predEditing = false; t.predDraft = '';
     if (pts.length >= 4) {
-      t.pred = root.FxSenkei.predict(pts[0], pts[1], pts[2], pts[3]);
-      t.pred.j = root.FxSenkei.judge(t.g, t.pred);
+      const base = root.FxSenkei.predict(pts[0], pts[1], pts[2], pts[3]);
+      t.predLen = f3(base.len);
+      t.predCount = t.predCount || 1;
+      t.predHasPrev = true;
+      calcPreds();
     }
     scr = 'targetConfirm'; msg = '';
   }
   function openTargetVisual() {
     const t = tgSt, s = stationOfTarget(), pts = t.rows.map(r => r.res);
     const viewPts = pts.map(p => ({ name: p.name, x: p.x, y: p.y, j: p.j }));
-    V().open({ g: t.g, pts: viewPts, pred: t.pred }, () => {
+    V().open({ g: t.g, pts: viewPts, pred: t.pred, preds: t.preds }, () => {
       const stObj = st();
       stObj.bx = s.bx; stObj.by = s.by; stObj.ox = s.ox; stObj.oy = s.oy;
       env.save();
@@ -338,6 +369,28 @@
       return;
     }
     if (scr === 'targetConfirm') {
+      if (tgSt && tgSt.predEditing) {
+        const f = activeField();
+        if (id === 'DEL') {
+          const arr = Array.from(tgSt.predDraft);
+          if (arr.length) { tgSt.predDraft = arr.slice(0, -1).join(''); msg = ''; }
+          return;
+        }
+        if (id === 'AC') {
+          if (tgSt.predDraft) { tgSt.predDraft = ''; msg = ''; }
+          else { tgSt.predEditing = false; }
+          return;
+        }
+        if ((id === 'SUB' || id === 'NEG') && f) { onChar('-'); return; }
+        if (id === 'DOT' && f) { onChar('.'); return; }
+        if (k.ins && /^[0-9]$/.test(k.ins) && f) { onChar(k.ins); return; }
+        if (id === 'EXE') {
+          if (tgSt.predDraft !== '') { tgSt.predLen = tgSt.predDraft; tgSt.predDraft = ''; calcPreds(); }
+          tgSt.predEditing = false;
+          return;
+        }
+        return;
+      }
       if (id === 'EXE') openTargetVisual();
       return;
     }
@@ -515,8 +568,20 @@
       return;
     }
     if (scr === 'targetConfirm') {
-      if (t === 'fix') { scr = 'targetTable'; initCellDraft(tgSt); return; }
-      if (t === 'visual') { openTargetVisual(); return; }
+      if (t === 'plen') { tgSt.predEditing = true; tgSt.predDraft = ''; tgSt.predHasPrev = tgSt.predLen !== ''; return; }
+      if (t.startsWith('pcnt:')) {
+        if (tgSt.predEditing && tgSt.predDraft !== '') { tgSt.predLen = tgSt.predDraft; tgSt.predDraft = ''; }
+        tgSt.predEditing = false;
+        tgSt.predCount = Number(t.slice(5)) || 1;
+        calcPreds();
+        return;
+      }
+      if (t === 'fix') { tgSt.predEditing = false; scr = 'targetTable'; initCellDraft(tgSt); return; }
+      if (t === 'visual') {
+        if (tgSt.predEditing && tgSt.predDraft !== '') { tgSt.predLen = tgSt.predDraft; tgSt.predDraft = ''; calcPreds(); }
+        tgSt.predEditing = false;
+        openTargetVisual(); return;
+      }
       return;
     }
     if (scr === 'pipeNo') {
@@ -685,7 +750,26 @@
         '<div class="ca-res-xy"><span>X ' + f3(x) + '</span><span>Y ' + f3(y) + '</span></div>' +
         '<div class="ca-res-pos"><span>' + esc(posCode(j)) + '</span><span><b>' + esc(Vw.mmText(j)) + '</b></span></div>' +
         '</div></td>';
+      let predHtml = '';
+      if (t.preds && t.preds.length) {
+        const lenView = t.predEditing
+          ? '<div class="ca-prev">' + esc(t.predLen) + '</div><div class="ca-draft">' + cellVal(t.predDraft, true) + '</div>'
+          : cellVal(t.predLen, false);
+        predHtml = '<div class="ca-predbox">' +
+          '<div class="ca-predhead"><b>次回予測</b><span>折れ角 ' + t.preds[0].bend.toFixed(3) + '°</span></div>' +
+          '<div class="ca-predctrl">' +
+          '<div class="ca-predlen' + (t.predEditing ? ' ca-active' : '') + '" data-tap="plen"><span class="ca-lbl">1本進む距離 (m)</span>' + lenView + '</div>' +
+          '<div class="ca-predcnt"><span class="ca-lbl">何本後まで</span><div class="ca-pcnts">' +
+          [1, 2, 3, 4, 5].map(k => '<button type="button" class="ca-pcnt' + (t.predCount === k ? ' on' : '') + '" data-tap="pcnt:' + k + '">' + k + '</button>').join('') +
+          '</div></div></div>' +
+          '<table class="ca-tbl ca-predtbl"><tbody>' +
+          t.preds.map(pr => '<tr><th>' + (t.preds.length === 1 ? '1本後' : pr.step + '本後') + '</th>' +
+            '<td>X ' + f3(pr.x) + '<br>Y ' + f3(pr.y) + '</td>' +
+            '<td><b>' + esc(posCode(pr.j)) + '</b><br><b>' + esc(Vw.mmText(pr.j)) + '</b></td></tr>').join('') +
+          '</tbody></table></div>';
+      }
       html = headHtml('入れた値の確かめ') + '<div class="ca-lcd">' +
+        predHtml +
         '<p class="ca-sub">後視点 X ' + f3(s.bx) + '　Y ' + f3(s.by) + ' ／ 機械点 X ' + f3(s.ox) + '　Y ' + f3(s.oy) + '</p>' +
         '<table class="ca-tbl ca-confirm-tbl"><thead><tr><th>測点</th><th>距離</th><th>角度</th><th>誤差</th></tr></thead><tbody>' +
         t.rows.map(r => {
@@ -693,8 +777,6 @@
           return '<tr><th>' + esc(p.name) + '</th><td>' + f3(p.d) + '</td><td>' + esc(Vw.fmtAngle(p.h)) + '</td>' +
             resCell(p.x, p.y, p.j) + '</tr>';
         }).join('') +
-        (t.pred ? '<tr class="ca-pred"><th>次回予測</th><td>' + f3(t.pred.len) + '</td><td>' + t.pred.bend.toFixed(3) + '°</td>' +
-          resCell(t.pred.x, t.pred.y, t.pred.j) + '</tr>' : '') +
         '</tbody></table>' +
         '<div class="ca-btns"><button type="button" class="ca-btn" data-tap="fix">戻って直す</button>' +
         '<button type="button" class="ca-btn pri" data-tap="visual">図を見る（EXE）</button></div></div>';

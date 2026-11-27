@@ -421,6 +421,17 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
   .ca-res-pos { border-left: 0; padding-left: 0; }
 }
 .ca-pred { background: #2d6b3822; }
+.ca-predbox { border: 2px solid #1b5e20; border-radius: 6px; background: #dff2c8; padding: 5px 6px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px #1b5e2028; }
+.ca-predhead { display: flex; justify-content: space-between; align-items: center; background: #1b5e20; color: #f4fce8; padding: 3px 8px; border-radius: 4px; font-size: .92em; }
+.ca-predctrl { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.ca-predlen { flex: 1 1 110px; border: 1px solid #1b5e2088; border-radius: 4px; background: #ffffffcc; padding: 3px 6px; font-family: "Consolas", "Menlo", "MS Gothic", monospace; font-weight: 700; cursor: pointer; }
+.ca-predcnt { flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px; }
+.ca-pcnts { display: flex; gap: 3px; }
+.ca-pcnt { flex: 1 1 0; padding: 3px 0; border: 1px solid #1b5e2088; border-radius: 4px; background: #ffffffaa; color: #1b5e20; font-weight: 700; cursor: pointer; }
+.ca-pcnt.on { background: #1b5e20; color: #fff; border-color: #1b5e20; }
+.ca-predtbl { background: #ffffff99; }
+.ca-predtbl th { background: #1b5e201a; color: #144418; white-space: nowrap; }
+.ca-predtbl td { font-family: "Consolas", "Menlo", "MS Gothic", monospace; font-size: .92em; line-height: 1.25; }
 .ca-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .ca-btn { border: 1px solid #496548; background: #d6e1c9; color: var(--ink); border-radius: 5px; padding: 5px 10px; font-weight: 700; cursor: pointer; }
 .ca-btn.pri { background: var(--ink); color: var(--lcd); }

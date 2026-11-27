@@ -79,9 +79,10 @@
       for (const l of paths.lines) poly(l, 'cv-al');
       // 管の向き（1 本目：測点2→1、2 本目：測点4→3）と予測へ進む線
       const P = data.pts;
+      const preds = data.preds && data.preds.length ? data.preds : (data.pred ? [data.pred] : []);
       if (P.length >= 2) poly([P[1], P[0]], 'cv-pipe');
       if (P.length >= 4) poly([P[3], P[2]], 'cv-pipe');
-      if (data.pred && P.length) poly([P[0], data.pred], 'cv-predline');
+      if (preds.length && P.length) poly([P[0]].concat(preds), 'cv-predline');
       // 測点・予測のラベル（左右のずれ方向に出し、近接時は縦位置をずらして重なりを防ぐ）
       const fmtCompact = j => {
         if (!j || !Number.isFinite(j.offset)) return '';
@@ -89,7 +90,7 @@
         return mm === 0 ? '中心' : (j.offset > 0 ? '右' : '左') + mm + 'mm';
       };
       const items = P.map((p, i) => ({ p, cls: 'cv-pt', text: (i + 1) + ' ' + fmtCompact(p.j) }));
-      if (data.pred) items.push({ p: data.pred, cls: 'cv-pred', text: '予測 ' + fmtCompact(data.pred.j) });
+      preds.forEach((pr, i) => items.push({ p: pr, cls: 'cv-pred', text: (preds.length === 1 ? '予測 ' : '予' + (i + 1) + ' ') + fmtCompact(pr.j) }));
       const labels = items.map(it => {
         const x = px(it.p), y = py(it.p), j = it.p.j;
         let left = j && Number.isFinite(j.offset) ? j.offset < 0 : x > W - 110;
@@ -193,8 +194,9 @@
     opt = opt || {};
     const D = root.FxDialog, h = D.h;
     const paths = alignmentPaths(data.g);
-    const all = data.g.points.filter(p => !/^RO/.test(p.name)).concat(data.pts).concat(data.pred ? [data.pred] : []);
-    const near = data.pts.concat(data.pred ? [data.pred] : []);
+    const preds = data.preds && data.preds.length ? data.preds : (data.pred ? [data.pred] : []);
+    const all = data.g.points.filter(p => !/^RO/.test(p.name)).concat(data.pts).concat(preds);
+    const near = data.pts.concat(preds);
     // 拡大：測点と予測のまわり。近くの線形も入るよう、いちばん近い足も含める
     const feet = near.map(p => p.j && p.j.foot).filter(Boolean);
     const views = zoomView(data, paths, all, near.concat(feet));
@@ -203,16 +205,16 @@
       h('td', { text: f3(p.x) }), h('td', { text: f3(p.y) }), h('td', { text: secName(p.j) }),
       h('td', { class: 'cv-mm', text: mmText(p.j) }), h('td', { text: p.j ? f3(p.j.distFromBP) : '―' })
     ]));
-    if (data.pred) rows.push(h('tr', { class: 'cv-predrow' }, [
-      h('td', { text: '次回予測' }), h('td', { text: f3(data.pred.x) }), h('td', { text: f3(data.pred.y) }), h('td', { text: secName(data.pred.j) }),
-      h('td', { class: 'cv-mm', text: mmText(data.pred.j) }), h('td', { text: data.pred.j ? f3(data.pred.j.distFromBP) : '―' })
-    ]));
+    preds.forEach((pr, i) => rows.push(h('tr', { class: 'cv-predrow' }, [
+      h('td', { text: preds.length === 1 ? '次回予測' : '予測 ' + (i + 1) + '本後' }), h('td', { text: f3(pr.x) }), h('td', { text: f3(pr.y) }), h('td', { text: secName(pr.j) }),
+      h('td', { class: 'cv-mm', text: mmText(pr.j) }), h('td', { text: pr.j ? f3(pr.j.distFromBP) : '―' })
+    ])));
     const table = h('table', { class: 'cv-table' }, [
       h('thead', {}, [h('tr', {}, ['測点', 'X', 'Y', '区間', '左右誤差', 'BPから'].map(t => h('th', { text: t })))]),
       h('tbody', {}, rows)
     ]);
-    const note = data.pred
-      ? '次回予測：1 本目と 2 本目の折れ角（' + data.pred.bend.toFixed(4) + '°）のまま、測点1〜測点3 の距離（' + f3(data.pred.len) + ' m）だけ進んだ位置。曲線総合プログラムと同じ求め方です。'
+    const note = preds.length
+      ? '次回予測：1 本目と 2 本目の折れ角（' + preds[0].bend.toFixed(4) + '°）のまま、1本あたり ' + f3(preds[0].len) + ' m ずつ ' + preds.length + ' 本後まで予測。'
       : '次回予測は、測点を 4 つ（1 本目の前・後、2 本目の前・後）測ったときに出ます。';
     const kids = [opt.before || null, views, h('div', { class: 'cv-tablewrap' }, [table]), h('p', { class: 'cv-note', text: note })].filter(Boolean);
     let dlg = null;
