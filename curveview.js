@@ -82,18 +82,38 @@
       if (P.length >= 2) poly([P[1], P[0]], 'cv-pipe');
       if (P.length >= 4) poly([P[3], P[2]], 'cv-pipe');
       if (data.pred && P.length) poly([P[0], data.pred], 'cv-predline');
-      // 点が近すぎて文字が重なるときは番号だけ
-      const marks = P.concat(data.pred ? [data.pred] : []);
-      let close = false;
-      for (let i = 0; i < marks.length; i++) for (let k = i + 1; k < marks.length; k++)
-        if (Math.abs(py(marks[i]) - py(marks[k])) < 16 && Math.abs(px(marks[i]) - px(marks[k])) < 120) close = true;
-      const label = (p, text, cls) => {
-        const x = px(p), y = py(p), left = x > W - 110;
-        svg.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 5, class: cls }));
-        svg.append(el('text', { x: (left ? x - 8 : x + 8).toFixed(1), y: (y + 4).toFixed(1), class: 'cv-label', 'text-anchor': left ? 'end' : 'start' }, text));
+      // 測点・予測のラベル（左右のずれ方向に出し、近接時は縦位置をずらして重なりを防ぐ）
+      const fmtCompact = j => {
+        if (!j || !Number.isFinite(j.offset)) return '';
+        const mm = Math.round(Math.abs(j.offset) * 1000);
+        return mm === 0 ? '中心' : (j.offset > 0 ? '右' : '左') + mm + 'mm';
       };
-      P.forEach((p, i) => label(p, close ? String(i + 1) : (i + 1) + '　' + mmText(p.j), 'cv-pt'));
-      if (data.pred) label(data.pred, close ? '予測' : '予測　' + mmText(data.pred.j), 'cv-pred');
+      const items = P.map((p, i) => ({ p, cls: 'cv-pt', text: (i + 1) + ' ' + fmtCompact(p.j) }));
+      if (data.pred) items.push({ p: data.pred, cls: 'cv-pred', text: '予測 ' + fmtCompact(data.pred.j) });
+      const labels = items.map(it => {
+        const x = px(it.p), y = py(it.p), j = it.p.j;
+        let left = j && Number.isFinite(j.offset) ? j.offset < 0 : x > W - 110;
+        if (left && x < 92) left = false;
+        if (!left && x > W - 92) left = true;
+        return { it, x, y, ly: y, left };
+      });
+      [true, false].forEach(isLeft => {
+        const grp = labels.filter(l => l.left === isLeft).sort((a, b) => a.y - b.y);
+        for (let k = 1; k < grp.length; k++) {
+          if (grp[k].ly - grp[k - 1].ly < 15) grp[k].ly = grp[k - 1].ly + 15;
+        }
+        if (grp.length && grp[grp.length - 1].ly > H - 14) {
+          const shift = grp[grp.length - 1].ly - (H - 14);
+          grp.forEach(l => { l.ly -= shift; });
+        }
+      });
+      labels.forEach(({ it, x, y, ly, left }) => {
+        svg.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 5, class: it.cls }));
+        if (Math.abs(ly - y) > 4) {
+          svg.append(el('line', { x1: x.toFixed(1), y1: y.toFixed(1), x2: (left ? x - 7 : x + 7).toFixed(1), y2: ly.toFixed(1), stroke: '#99a', 'stroke-width': 0.8 }));
+        }
+        svg.append(el('text', { x: (left ? x - 8 : x + 8).toFixed(1), y: (ly + 4).toFixed(1), class: 'cv-label', 'text-anchor': left ? 'end' : 'start' }, it.text));
+      });
       svg.append(el('text', { x: W - 4, y: 16, class: 'cv-north' }, '↑北(X)'));
     }
     // 画面の点（svg の中の px）を固定したまま倍率を変える

@@ -54,16 +54,29 @@
     if (scr === 'targetTable' && tgSt) return tgSt;
     return null;
   }
-  function commitDraft(ds) {
-    if (!ds || ds.sel >= 4 || !ds.draft) { if (ds) ds.draft = ''; return; }
+  function initCellDraft(ds) {
+    if (!ds) return;
     const f = ds.fields[ds.sel];
-    if (f) { f.set(ds.draft); afterEdit(); }
+    ds.draft = '';
+    ds.hasPrev = !!(f && f.get() !== '');
+  }
+  function commitDraft(ds) {
+    if (!ds) return;
+    if (ds.hasPrev && ds.draft !== '') {
+      const f = ds.fields[ds.sel];
+      if (f) { f.set(ds.draft); afterEdit(); }
+    }
     ds.draft = '';
   }
-  function getText() { const ds = draftState(); if (ds && ds.sel < 4) return ds.draft; const f = activeField(); return f ? f.get() : ''; }
+  function moveDraftSel(ds, nextSel) {
+    commitDraft(ds);
+    ds.sel = nextSel;
+    initCellDraft(ds);
+  }
+  function getText() { const ds = draftState(); if (ds && ds.hasPrev) return ds.draft; const f = activeField(); return f ? f.get() : ''; }
   function replaceTail(n, s) {
     const ds = draftState();
-    if (ds && ds.sel < 4) {
+    if (ds && ds.hasPrev) {
       const arr = Array.from(ds.draft);
       ds.draft = arr.slice(0, Math.max(0, arr.length - n)).join('') + s;
       msg = ''; return;
@@ -79,7 +92,7 @@
     if (f.kind === 'num' && !/^[0-9.\-]$/.test(ch)) return;
     if (f.kind === 'angle' && !/^[0-9.\-°′″ ]$/.test(ch)) return;
     const ds = draftState();
-    if (ds && ds.sel < 4) { ds.draft += ch; msg = ''; redraw(); return; }
+    if (ds && ds.hasPrev) { ds.draft += ch; msg = ''; redraw(); return; }
     f.set(f.get() + ch);
     afterEdit();
     redraw();
@@ -175,6 +188,7 @@
       { id: 'd', label: '距離', kind: 'num', get: () => trSt.d, set: v => { trSt.d = v; } },
       { id: 'an', label: '角度', kind: 'angle', get: () => trSt.an, set: v => { trSt.an = v; } }
     ];
+    initCellDraft(trSt);
     scr = 'transit'; msg = ''; closeFlick();
   }
   function calcTransit() {
@@ -222,6 +236,7 @@
       fs.push({ id: 'a' + i, label: r.name + ' 角度', kind: 'angle', row: i, get: () => r.an, set: v => { r.an = v; } });
     });
     tgSt.fields = fs;
+    initCellDraft(tgSt);
     scr = 'targetTable'; msg = ''; closeFlick();
   }
   function stationOfTarget() {
@@ -333,7 +348,7 @@
     if (!f) return;
     if (id === 'DEL') {
       const ds = draftState();
-      if (ds && ds.sel < 4) {
+      if (ds && ds.hasPrev) {
         const arr = Array.from(ds.draft);
         if (arr.length) { ds.draft = arr.slice(0, -1).join(''); msg = ''; }
         return;
@@ -344,7 +359,7 @@
     }
     if (id === 'AC') {
       const ds = draftState();
-      if (ds && ds.sel < 4) { if (ds.draft) { ds.draft = ''; msg = ''; } else { f.set(''); afterEdit(); } return; }
+      if (ds && ds.hasPrev) { if (ds.draft) { ds.draft = ''; msg = ''; } else { f.set(''); ds.hasPrev = false; afterEdit(); } return; }
       if (f.kind !== 'dir') { f.set(''); afterEdit(); }
       return;
     }
@@ -368,26 +383,26 @@
       return;
     }
     if (scr === 'transit') {
-      if (id === 'UP') { commitDraft(trSt); trSt.sel = Math.max(0, trSt.sel - 1); }
-      else if (id === 'DOWN') { commitDraft(trSt); trSt.sel = Math.min(trSt.fields.length - 1, trSt.sel + 1); }
-      else if (id === 'LEFT' && trSt.sel < 4) { commitDraft(trSt); trSt.sel = Math.max(0, trSt.sel - 1); }
-      else if (id === 'RIGHT' && trSt.sel < 4) { commitDraft(trSt); trSt.sel = Math.min(3, trSt.sel + 1); }
+      if (id === 'UP') moveDraftSel(trSt, Math.max(0, trSt.sel - 1));
+      else if (id === 'DOWN') moveDraftSel(trSt, Math.min(trSt.fields.length - 1, trSt.sel + 1));
+      else if (id === 'LEFT' && trSt.sel < 4) moveDraftSel(trSt, Math.max(0, trSt.sel - 1));
+      else if (id === 'RIGHT' && trSt.sel < 4) moveDraftSel(trSt, Math.min(3, trSt.sel + 1));
       else if (id === 'EXE') {
         commitDraft(trSt);
         if (trSt.sel === trSt.fields.length - 1) finishTransit();
-        else trSt.sel++;
+        else { trSt.sel++; initCellDraft(trSt); }
       }
       return;
     }
     if (scr === 'targetTable') {
-      if (id === 'UP') { commitDraft(tgSt); tgSt.sel = tgSt.sel >= 6 ? tgSt.sel - 2 : Math.max(0, tgSt.sel - 2); }
-      else if (id === 'DOWN') { commitDraft(tgSt); tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 2); }
-      else if (id === 'LEFT') { commitDraft(tgSt); tgSt.sel = Math.max(0, tgSt.sel - 1); }
-      else if (id === 'RIGHT') { commitDraft(tgSt); tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 1); }
+      if (id === 'UP') moveDraftSel(tgSt, tgSt.sel >= 6 ? tgSt.sel - 2 : Math.max(0, tgSt.sel - 2));
+      else if (id === 'DOWN') moveDraftSel(tgSt, Math.min(tgSt.fields.length - 1, tgSt.sel + 2));
+      else if (id === 'LEFT') moveDraftSel(tgSt, Math.max(0, tgSt.sel - 1));
+      else if (id === 'RIGHT') moveDraftSel(tgSt, Math.min(tgSt.fields.length - 1, tgSt.sel + 1));
       else if (id === 'EXE') {
         commitDraft(tgSt);
         if (tgSt.sel === tgSt.fields.length - 1) checkTargetTable();
-        else tgSt.sel++;
+        else { tgSt.sel++; initCellDraft(tgSt); }
       }
       return;
     }
@@ -483,7 +498,7 @@
     }
     if (scr === 'transit') {
       if (t === 'go') { commitDraft(trSt); finishTransit(); return; }
-      if (t.startsWith('f:')) { commitDraft(trSt); trSt.sel = Number(t.slice(2)); return; }
+      if (t.startsWith('f:')) { moveDraftSel(trSt, Number(t.slice(2))); return; }
       return;
     }
     if (scr === 'transitDone') {
@@ -496,11 +511,11 @@
     }
     if (scr === 'targetTable') {
       if (t === 'check') { commitDraft(tgSt); checkTargetTable(); return; }
-      if (t.startsWith('f:')) { commitDraft(tgSt); tgSt.sel = Number(t.slice(2)); return; }
+      if (t.startsWith('f:')) { moveDraftSel(tgSt, Number(t.slice(2))); return; }
       return;
     }
     if (scr === 'targetConfirm') {
-      if (t === 'fix') { scr = 'targetTable'; return; }
+      if (t === 'fix') { scr = 'targetTable'; initCellDraft(tgSt); return; }
       if (t === 'visual') { openTargetVisual(); return; }
       return;
     }
@@ -591,20 +606,23 @@
         '<button type="button" class="ca-btn pri" data-tap="save">保存して使う</button>' +
         '</div></div>';
     } else if (scr === 'transit') {
-      const t = trSt, p = Vw.parseAngle(t.an);
-      const cell = (idx, label, extra) => {
-        const f = t.fields[idx], on = t.sel === idx;
-        const valHtml = (on && idx < 4)
-          ? '<div class="ca-prev">' + esc(f.get() || '―') + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
-          : cellVal(f.get(), on);
-        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + esc(label) + '</span>' + valHtml + (extra || '') + '</td>';
+      const t = trSt;
+      const angHint = v => {
+        const p = Vw.parseAngle(v);
+        return p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>';
       };
-      const angExtra = p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>';
+      const cell = (idx, label) => {
+        const f = t.fields[idx], on = t.sel === idx, isAng = f.kind === 'angle';
+        const valHtml = (on && t.hasPrev)
+          ? '<div class="ca-prev">' + esc(f.get()) + (isAng ? angHint(f.get()) : '') + '</div><div class="ca-draft">' + cellVal(t.draft, true) + (isAng ? angHint(t.draft) : '') + '</div>'
+          : cellVal(f.get(), on) + (isAng ? angHint(f.get()) : '');
+        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + esc(label) + '</span>' + valHtml + '</td>';
+      };
       html = headHtml('トランシット（' + t.a.name + '）') +
         '<div class="ca-lcd"><table class="ca-tbl ca-transit-tbl"><tbody>' +
         '<tr>' + cell(0, '後視点 X') + cell(1, '後視点 Y') + '</tr>' +
         '<tr>' + cell(2, '機械点 X') + cell(3, '機械点 Y') + '</tr>' +
-        '<tr>' + cell(4, '距離') + cell(5, '角度', angExtra) + '</tr>' +
+        '<tr>' + cell(4, '距離') + cell(5, '角度') + '</tr>' +
         '<tr><th>測った点・誤差</th><td>' + (t.res ? '測点X ' + f3(t.res.p.x) + '　測点Y ' + f3(t.res.p.y) + '<br><b>' + esc(Vw.sideLine(t.res.j)) + '</b>' : '―') + '</td></tr>' +
         '</tbody></table>' +
         (msg ? '<p class="ca-err">' + esc(msg) + '</p>' : '') +
@@ -628,11 +646,15 @@
         ).join('') + '</div></div>';
     } else if (scr === 'targetTable') {
       const t = tgSt;
+      const angHint = v => {
+        const p = Vw.parseAngle(v);
+        return p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>';
+      };
       const stCell = (idx, label) => {
         const f = t.fields[idx], on = t.sel === idx;
-        const valHtml = on
-          ? '<div class="ca-prev">' + esc(f.get() || '―') + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
-          : cellVal(f.get(), false);
+        const valHtml = (on && t.hasPrev)
+          ? '<div class="ca-prev">' + esc(f.get()) + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
+          : cellVal(f.get(), on);
         return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + label + '</span>' + valHtml + '</td>';
       };
       html = headHtml('ターゲット（' + t.a.name + '）') +
@@ -642,10 +664,15 @@
         '</tbody></table>' +
         '<table class="ca-tbl" style="margin-top:4px"><thead><tr><th>測点</th><th>距離</th><th>角度</th><th>誤差</th></tr></thead><tbody>' +
         t.rows.map((r, i) => {
-          const di = 4 + i * 2, ai = di + 1, p = Vw.parseAngle(r.an);
-          const angView = cellVal(r.an, t.sel === ai) + (p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>');
+          const di = 4 + i * 2, ai = di + 1;
+          const distView = (t.sel === di && t.hasPrev)
+            ? '<div class="ca-prev">' + esc(r.d) + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
+            : cellVal(r.d, t.sel === di);
+          const angView = (t.sel === ai && t.hasPrev)
+            ? '<div class="ca-prev">' + esc(r.an) + angHint(r.an) + '</div><div class="ca-draft">' + cellVal(t.draft, true) + angHint(t.draft) + '</div>'
+            : cellVal(r.an, t.sel === ai) + angHint(r.an);
           return '<tr><th>' + esc(r.name) + '</th>' +
-            '<td class="ca-val' + (t.sel === di ? ' ca-active' : '') + '" data-tap="f:' + di + '">' + cellVal(r.d, t.sel === di) + '</td>' +
+            '<td class="ca-val' + (t.sel === di ? ' ca-active' : '') + '" data-tap="f:' + di + '">' + distView + '</td>' +
             '<td class="ca-val' + (t.sel === ai ? ' ca-active' : '') + '" data-tap="f:' + ai + '">' + angView + '</td>' +
             '<td class="ca-errcell">' + (r.res ? esc(Vw.sideLine(r.res.j)) : '―') + '</td></tr>';
         }).join('') +
