@@ -6,8 +6,9 @@
 (function (root) {
   'use strict';
   const FS = [0.8, 0.9, 1, 1.15, 1.3];
+  const LCD_FONT_PT_PRESETS = [10, 12, 14, 17, 21];
   const CURSOR_SCALE = [0.85, 1, 1.25];
-  const APPEARANCE = ['font', 'lcd', 'lcdFont', 'cursorSide', 'cursorSize'];
+  const APPEARANCE = ['font', 'lcd', 'lcdFont', 'lcdFontPt', 'cursorSide', 'cursorSize'];
   const BLOCKS = ['lcd', 'upper', 'nkeys', 'tabs'];
   const KEY_MIN = { upper: { w: 300, h: 204 }, nkeys: { w: 252, h: 144 } };
   const SNAP_PX = 10;
@@ -30,8 +31,9 @@
     else if (!open) opt.onApply(info);
   }
 
-  function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, cursorSize: 2, cursorSide: 'right', portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
+  function defaults() { return { orient: 'auto', font: 3, lcd: 'wide', lcdFont: 3, lcdFontPt: 14, cursorSize: 2, cursorSide: 'right', portrait: clone(DEF.portrait), landscape: clone(DEF.landscape), presets: [] }; }
   function fix(s) {
+    const rawPt = s && s.lcdFontPt;
     const d = defaults();
     s = Object.assign(d, s || {});
     for (const o of ['portrait', 'landscape']) {
@@ -42,6 +44,10 @@
     // ディスプレイ：wide＝見やすい表示（行・桁を増やす）、real＝実機と同じ 16 桁×4 行
     if (!['wide', 'real'].includes(s.lcd)) s.lcd = 'wide';
     if (!(s.lcdFont >= 1 && s.lcdFont <= 5)) s.lcdFont = 3;
+    if (rawPt == null || Number.isNaN(Number(rawPt))) {
+      s.lcdFontPt = LCD_FONT_PT_PRESETS[s.lcdFont - 1] || 14;
+    }
+    s.lcdFontPt = Math.max(8, Math.min(48, Math.round(Number(s.lcdFontPt))));
     if (![1, 2, 3].includes(s.cursorSize)) s.cursorSize = 2;
     if (!['left', 'right'].includes(s.cursorSide)) s.cursorSide = 'right';
     if (!['auto', 'portrait', 'landscape'].includes(s.orient)) s.orient = 'auto';
@@ -365,9 +371,31 @@
         h('div', {}, [h('h4', { text: 'ディスプレイの表示' }),
           seg([['wide', '見やすい表示（行と桁を増やす）'], ['real', '実機と同じ（16 桁×4 行）']], () => st.lcd, v => { st.lcd = v; }),
           h('p', { class: 'lo-note', text: '見やすい表示では、ディスプレイの高さと幅に合わせて行と桁が増えます。プログラムの入力・答え・日本語の変数名も残します。実機の表示を確かめるときは「実機と同じ」を選ぶと 16 桁×4 行になります。' }),
-          h('h4', { text: 'ディスプレイの文字（見やすい表示のとき）' }),
-          seg([[1, '1 小'], [2, '2'], [3, '3 標準'], [4, '4'], [5, '5 大']], () => st.lcdFont, v => { st.lcdFont = v; }),
-          h('p', { class: 'lo-note', text: '小さくするほど、行と桁が増えます（16 桁より少なくはなりません）。' })]),
+          h('h4', { text: 'ディスプレイの文字（ポイント数）' }),
+          (() => {
+            const setPt = v => {
+              const n = Math.max(8, Math.min(48, Math.round(Number(v) || 14)));
+              st.lcdFontPt = n;
+              update();
+            };
+            const ptIn = h('input', {
+              type: 'number', min: '8', max: '48', step: '1', class: 'lo-pt-in',
+              'aria-label': 'ディスプレイの文字のポイント数',
+              onchange: e => setPt(e.target.value)
+            });
+            refresh.push(() => { ptIn.value = String(st.lcdFontPt); });
+            ptIn.value = String(st.lcdFontPt);
+            return h('div', {}, [
+              h('div', { class: 'lo-seg lo-pt-row' }, [
+                h('button', { type: 'button', text: '−', onclick: () => setPt(st.lcdFontPt - 1) }),
+                ptIn,
+                h('span', { class: 'lo-pt-unit', text: 'pt' }),
+                h('button', { type: 'button', text: '＋', onclick: () => setPt(st.lcdFontPt + 1) })
+              ]),
+              seg([[12, '12pt'], [14, '14pt 標準'], [18, '18pt'], [24, '24pt'], [30, '30pt'], [36, '36pt']], () => st.lcdFontPt, setPt)
+            ]);
+          })(),
+          h('p', { class: 'lo-note', text: '8〜48 pt で指定できます。大きくするほど見やすくなります（見やすい表示・曲線測量に反映）。' })]),
         h('div', {}, [h('h4', { text: '並び方' }), modeNote,
           seg([['standard', '標準の並び'], ['free', '自由配置']], () => st[info.orient].mode, v => { st[info.orient].mode = v; }),
           h('p', { class: 'lo-note', text: '標準の並びでは、ディスプレイ下端のつまみを上下に動かすと、キーの縦の大きさも合わせて変わります。' }),

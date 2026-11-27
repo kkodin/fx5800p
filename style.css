@@ -217,6 +217,9 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .lo-seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .lo-seg button { flex: 1; min-width: 4.5em; min-height: 40px; background: #2b2e33; color: #eee; border: 1px solid #44484f; border-radius: 8px; }
 .lo-seg button.on { background: #e0a12a; color: #1b1b1b; border-color: #e0a12a; font-weight: 700; }
+.lo-pt-row { align-items: center; margin-bottom: 6px; flex-wrap: nowrap; }
+.lo-pt-in { width: 5.5em; min-height: 40px; padding: 4px 8px; border: 1px solid #44484f; border-radius: 8px; background: #1d1f23; color: #fff; font-size: 16px; font-weight: 700; text-align: center; }
+.lo-pt-unit { font-weight: 700; color: #cfd3d8; padding: 0 4px; }
 .lo-note { font-size: 12px; color: #9aa0a8; margin: 4px 0 0; }
 .lo-presets { display: grid; gap: 6px; }
 .lo-preset { display: flex; gap: 6px; align-items: center; background: #2b2e33; border: 1px solid #3c4047; border-radius: 8px; padding: 6px 8px; }
@@ -390,7 +393,7 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .ca-tools { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 .ca-tbtn { border: 1px solid #496548; background: #d6e1c9; color: var(--ink); border-radius: 4px; padding: 1px 6px; font-size: .78em; font-weight: 700; cursor: pointer; }
 .ca-tbtn.on { background: var(--ink); color: var(--lcd); }
-.ca-lcd { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; container-type: inline-size; display: flex; flex-direction: column; gap: 6px; padding: 2px 1px; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: clamp(12.5px, 3.3cqi, 17px); }
+.ca-lcd { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; container-type: inline-size; display: flex; flex-direction: column; gap: 6px; padding: 2px 1px; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: var(--ca-fs, clamp(12.5px, 3.3cqi, 17px)); }
 .ca-tbl { width: 100%; max-width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; background: #ffffff28; }
 .ca-transit-tbl { table-layout: fixed; width: min(100%, 24em); }
 .ca-transit-tbl th, .ca-transit-tbl td { width: 50%; }

@@ -1,4 +1,4 @@
-const CACHE = 'pocket-calc-v3-20261127c-v1423';
+const CACHE = 'pocket-calc-v3-20261127d-v1423';
 const ASSETS = ['./', './index.html', './help.html', './style.css?v=1.4.23', './engine.js?v=1.4.23', './angle.js?v=1.4.23', './basic.js?v=1.4.23', './formulas.js?v=1.4.23', './import.js?v=1.4.23', './complete.js?v=1.4.23', './flick.js?v=1.4.23', './app.js?v=1.4.23', './curveview.js?v=1.4.23', './curveapp.js?v=1.4.23', './editor.html', './editor.css?v=1.4.23', './editor.js?v=1.4.23', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
   './genba.html', './genba.css?v=1.4.23', './angle.js?v=1.4.23', './geo.js?v=1.4.23', './points.js?v=1.4.23', './store.js?v=1.4.23', './dialog.js?v=1.4.23', './sokusetsu.js?v=1.4.23', './plot.js?v=1.4.23', './genba.js?v=1.4.23', './genba-calc.js?v=1.4.23', './zip.js?v=1.4.23', './cclwrite.js?v=1.4.23', './senkei.js?v=1.4.23', './layout.js?v=1.4.23', './proginfo.js?v=1.4.23', './pickxy.js?v=1.4.23'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE)

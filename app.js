@@ -1659,8 +1659,9 @@
     updateCands();
   }
 
-  // ---- 入力候補（英字を打つと候補を出し、Tab かタップで決める） ----
+  // ---- 入力候補（英字を打つと候補を出し、Tab かタップで決める / フリック漢字変換候補も表示） ----
   let cand = { list: [], sel: 0, kind: null, len: 0 };
+  let flickCand = null; // { list, sel, pick }
   function updateCands() {
     let word = '';
     if (mode === 'edit') {
@@ -1680,6 +1681,12 @@
   }
   function renderCands() {
     const box = $('cands');
+    if (flickCand && flickCand.list.length && flick) {
+      box.hidden = false; $('ver').hidden = true;
+      box.innerHTML = flickCand.list.map((w, i) => '<button type="button" class="cd' + (i === flickCand.sel ? ' sel' : '') + '" data-c="' + i + '">' + esc(w) + '</button>').join('');
+      const sel = box.querySelector('.sel'); if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      return;
+    }
     const show = cand.list.length && cand.kind === mode;
     box.hidden = !show; $('ver').hidden = !!show;
     if (!show) { box.innerHTML = ''; return; }
@@ -1687,6 +1694,11 @@
     const sel = box.querySelector('.sel'); if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   function acceptCand(i) {
+    if (flickCand && flickCand.list.length && flick) {
+      const pick = flickCand.pick;
+      if (pick) pick(i ?? flickCand.sel);
+      return;
+    }
     const x = cand.list[i ?? cand.sel]; if (!x) return;
     if (cand.kind === 'edit' && mode === 'edit') {
       const ta = $('editor'), a = ta.selectionStart, k = x[1].indexOf('|'), plain = x[1].replace('|', '');
@@ -1844,38 +1856,50 @@
   let renderedFlick = false, renderedFlickMode = null;
   function flickTarget() {
     const onModeChange = () => { render(); };
+    const onCands = (list, idx, pick) => {
+      flickCand = list && list.length ? { list, sel: idx, pick } : null;
+      renderCands();
+    };
     if (mode === 'curve') return {
       onChar: s => { FxCurveApp.onChar(s); render(); },
       getText: () => FxCurveApp.getText(),
       replaceTail: (n, s) => { FxCurveApp.replaceTail(n, s); render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }, onModeChange
+      onClose: () => { flick = false; render(); }, onModeChange, onCands
     };
     if (mode === 'name') return {
       onChar: s => { if (Array.from(nameIn.text).length < 12) { nameIn.text += s; render(); } },
       getText: () => nameIn.text,
       replaceTail: (n, s) => { const a = Array.from(nameIn.text); nameIn.text = a.slice(0, Math.max(0, a.length - n)).join('') + s; render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }, onModeChange
+      onClose: () => { flick = false; render(); }, onModeChange, onCands
     };
     if (mode === 'edit') return {
       onChar: s => { editInsert(s); render(); },
       getText: () => { const ta = $('editor'); return ta.value.slice(0, ta.selectionStart); },
-      replaceTail: (n, s) => { const ta = $('editor'), p = ta.selectionStart; ta.setRangeText(s, Math.max(0, p - n), p, 'end'); editChanged(); render(); },
+      replaceTail: (n, s) => {
+        const ta = $('editor'), p = ta.selectionStart;
+        const cut = Array.from(ta.value.slice(0, p)).slice(-n).join('').length;
+        ta.setRangeText(s, p - cut, p, 'end'); editChanged(); render();
+      },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }, onModeChange
+      onClose: () => { flick = false; render(); }, onModeChange, onCands
     };
     return {
       onChar: s => { insertText(s); render(); },
       getText: () => comp.toks.slice(0, comp.cur).join(''),
-      replaceTail: (n, s) => { comp.toks.splice(Math.max(0, comp.cur - n), n, s); comp.cur = Math.max(0, comp.cur - n) + 1; render(); },
+      replaceTail: (n, s) => {
+        const cs = Array.from(s), pos = Math.max(0, comp.cur - n);
+        comp.toks.splice(pos, n, ...cs); comp.cur = pos + cs.length; render();
+      },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }, onModeChange
+      onClose: () => { flick = false; render(); }, onModeChange, onCands
     };
   }
   function updateKeyFaces() {
     const canFlick = flick && window.FxFlick && ['name', 'curve', 'edit', 'comp'].includes(mode);
     if (!canFlick && flick) flick = false;
+    if (!canFlick && flickCand) { flickCand = null; renderCands(); }
     const flickMode = canFlick ? window.FxFlick.getMode() : null;
     if (canFlick !== renderedFlick || flickMode !== renderedFlickMode) {
       renderedFlick = canFlick;
@@ -1932,8 +1956,7 @@
     };
     document.querySelectorAll('.keypad, .top').forEach(bind);
   }
-  // 見やすい表示のディスプレイの文字の大きさ（px）
-  const LCD_FS = [13, 16, 19, 23, 28];
+  // 見やすい表示のディスプレイの文字の大きさ（ポイント数 → px：1pt = 4/3px）
   function fitLcd() {
     const lcd = $('lcd'), calc = $('calc');
     const handle = $('lcdResize');
@@ -1948,8 +1971,10 @@
     probe.remove();
     const wide = layout.lcd === 'wide';
     const glyphWidth = cw || 0.6;
-    const maxFont = wide ? LCD_FS[layout.lcdFont - 1] : 30;
-    let fs = Math.max(8, Math.min(maxFont, w / (16 * glyphWidth)));
+    const pt = Number(layout.lcdFontPt) || 14;
+    const ptPx = pt * (96 / 72);
+    document.documentElement.style.setProperty('--ca-fs', ptPx.toFixed(2) + 'px');
+    let fs = wide ? Math.max(8, ptPx) : Math.max(8, Math.min(30, w / (16 * glyphWidth)));
     const rowHeight = 1.22, indicatorHeight = 0.72;
     const padding = el => {
       const css = getComputedStyle(el);
@@ -1957,7 +1982,7 @@
     };
     let available = lcd.clientHeight - padding(lcd);
     if (free) {
-      fs = Math.max(8, Math.min(fs, available / (4 * rowHeight + indicatorHeight)));
+      if (!wide) fs = Math.max(8, Math.min(fs, available / (4 * rowHeight + indicatorHeight)));
     } else {
       const bezel = lcd.parentElement;
       const barHeight = calc.querySelector('.bar').offsetHeight;
@@ -1965,7 +1990,9 @@
         + calc.querySelector('.top').offsetHeight + barHeight;
       // 4 段ずつの関数キーとテンキーが押せる高さを残す。
       const keypadHeight = 300;
-      const base = fs * (4 * rowHeight + indicatorHeight);
+      const base = wide
+        ? Math.min(fs * (4 * rowHeight + indicatorHeight), Math.max(fs * (rowHeight + indicatorHeight), calc.clientHeight - fixed - keypadHeight))
+        : fs * (4 * rowHeight + indicatorHeight);
       const max = Math.max(0, Math.floor(Math.min(36 * rowHeight * fs, calc.clientHeight - fixed - base - keypadHeight)));
       const extra = Math.max(0, Math.min(max, Number(layout[orient].lcdExtra) || 0));
       calc.style.setProperty('--lcd-extra', extra + 'px');
@@ -1976,8 +2003,8 @@
       }
       available = base + extra;
     }
-    const rows = wide ? Math.max(4, Math.min(40, Math.floor((available / fs - indicatorHeight) / rowHeight + 0.001))) : 4;
-    const cols = wide ? Math.min(48, Math.max(16, Math.floor(w / (fs * glyphWidth)))) : 16;
+    const rows = wide ? Math.max(1, Math.min(40, Math.floor((available / fs - indicatorHeight) / rowHeight + 0.001))) : 4;
+    const cols = wide ? Math.min(48, Math.max(1, Math.floor(w / (fs * glyphWidth)))) : 16;
     if (handle) handle.setAttribute('aria-valuetext', rows + ' 行');
     document.documentElement.style.setProperty('--lcd-fs', fs.toFixed(2) + 'px');
     document.documentElement.style.setProperty('--rows', String(rows));
