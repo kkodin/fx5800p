@@ -214,7 +214,10 @@
     if (s[0] === '-') { neg = true; s = s.slice(1).trim(); }
     let d, m = 0, sec = 0;
     const tail = r => Number((r.slice(0, 2) || '0') + (r.length > 2 ? '.' + r.slice(2) : ''));
-    if (/^\d+\.\d*$/.test(s)) {                     // 度.分秒
+    if (/^\d+\.\d+\.\d+(\.\d+)?$/.test(s)) {      // 度.分.秒（点が 2 つ以上：5.50.20 ／ 356.12.15）
+      const p = s.split('.');
+      [d, m, sec] = (p.length === 4 ? [p[0], p[1], p[2] + '.' + p[3]] : p).map(Number);
+    } else if (/^\d+\.\d*$/.test(s)) {              // 度.分秒
       const [a, b] = s.split('.'); const r = b.padEnd(4, '0');
       d = Number(a); m = Number(r.slice(0, 2)); sec = tail(r.slice(2));
     } else if (/^\d+$/.test(s)) {                   // 数字だけ：度（3 桁。360 以上になるなら 2 桁）→分 2 桁→秒
