@@ -179,7 +179,7 @@
         else if (act === 'exe') cb.onExe();
         else if (act === 'close') cb.onClose();
         else if (act === 'space') cb.onChar(' ');
-        else if (act === 'mode') { subMode = subMode === 'kana' ? 'alnum' : 'kana'; render(container, cb); }
+        else if (act === 'mode') { subMode = subMode === 'kana' ? 'alnum' : 'kana'; render(container, cb); if (cb.onModeChange) cb.onModeChange(subMode); }
         else if (act === 'mod') {
           const text = cb.getText();
           const arr = Array.from(text);
@@ -238,5 +238,5 @@
     convState = null;
   }
 
-  root.FxFlick = { render, clearHandlers };
+  root.FxFlick = { render, clearHandlers, getMode: () => subMode, setMode: m => { if (m === 'kana' || m === 'alnum') subMode = m; } };
 })(typeof window !== 'undefined' ? window : globalThis);

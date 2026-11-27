@@ -32,6 +32,8 @@
   const curAlign = () => { const s = st(); return s.aligns.find(a => a.name === s.cur) || null; };
   const redraw = () => env && env.redraw && env.redraw();
   const closeFlick = () => { if (env && env.isFlick && env.isFlick()) env.setFlick(false); };
+  const canFlick = () => scr === 'alignEdit' || scr === 'pipeNo';
+  const posCode = j => !j ? '―' : (j.type === 'cv' ? 'R-' : 'S-') + j.id + (j.priority >= 8 ? '（外）' : '');
 
   function enter(e) {
     env = e; scr = 'main'; msg = ''; mainSel = 0;
@@ -46,8 +48,25 @@
     if (scr === 'pipeNo' && pipeSt) return { kind: 'text', get: () => pipeSt.no, set: v => { pipeSt.no = v; } };
     return null;
   }
-  function getText() { const f = activeField(); return f ? f.get() : ''; }
+  function draftState() {
+    if (scr === 'transit' && trSt) return trSt;
+    if (scr === 'targetTable' && tgSt) return tgSt;
+    return null;
+  }
+  function commitDraft(ds) {
+    if (!ds || ds.sel >= 4 || !ds.draft) { if (ds) ds.draft = ''; return; }
+    const f = ds.fields[ds.sel];
+    if (f) { f.set(ds.draft); afterEdit(); }
+    ds.draft = '';
+  }
+  function getText() { const ds = draftState(); if (ds && ds.sel < 4) return ds.draft; const f = activeField(); return f ? f.get() : ''; }
   function replaceTail(n, s) {
+    const ds = draftState();
+    if (ds && ds.sel < 4) {
+      const arr = Array.from(ds.draft);
+      ds.draft = arr.slice(0, Math.max(0, arr.length - n)).join('') + s;
+      msg = ''; return;
+    }
     const f = activeField(); if (!f) return;
     const arr = Array.from(f.get());
     f.set(arr.slice(0, Math.max(0, arr.length - n)).join('') + s);
@@ -58,6 +77,8 @@
     if (f.kind === 'dir') return;
     if (f.kind === 'num' && !/^[0-9.\-]$/.test(ch)) return;
     if (f.kind === 'angle' && !/^[0-9.\-°′″ ]$/.test(ch)) return;
+    const ds = draftState();
+    if (ds && ds.sel < 4) { ds.draft += ch; msg = ''; redraw(); return; }
     f.set(f.get() + ch);
     afterEdit();
     redraw();
@@ -143,7 +164,7 @@
     trSt = {
       a, g: root.FxSenkei.build(a.align),
       bx: f3(s.bx || 0), by: f3(s.by || 0), ox: f3(s.ox || 0), oy: f3(s.oy || 0),
-      d: '', an: '', sel: 4, res: null, done: null, fields: []
+      d: '', an: '', sel: 0, draft: '', res: null, done: null, fields: []
     };
     trSt.fields = [
       { id: 'bx', label: '後視点 BX', kind: 'num', get: () => trSt.bx, set: v => { trSt.bx = v; } },
@@ -187,7 +208,7 @@
     tgSt = {
       a, g: root.FxSenkei.build(a.align), n,
       bx: f3(s.bx || 0), by: f3(s.by || 0), ox: f3(s.ox || 0), oy: f3(s.oy || 0),
-      rows, sel: 4, pred: null, fields: []
+      rows, sel: 0, draft: '', pred: null, fields: []
     };
     const fs = [
       { id: 'bx', label: 'BX', kind: 'num', row: -1, get: () => tgSt.bx, set: v => { tgSt.bx = v; } },
@@ -310,11 +331,19 @@
     const f = activeField();
     if (!f) return;
     if (id === 'DEL') {
+      const ds = draftState();
+      if (ds && ds.sel < 4) {
+        const arr = Array.from(ds.draft);
+        if (arr.length) { ds.draft = arr.slice(0, -1).join(''); msg = ''; }
+        return;
+      }
       const arr = Array.from(f.get());
       if (arr.length) { f.set(arr.slice(0, -1).join('')); afterEdit(); }
       return;
     }
     if (id === 'AC') {
+      const ds = draftState();
+      if (ds && ds.sel < 4) { if (ds.draft) { ds.draft = ''; msg = ''; } else { f.set(''); afterEdit(); } return; }
       if (f.kind !== 'dir') { f.set(''); afterEdit(); }
       return;
     }
@@ -338,22 +367,24 @@
       return;
     }
     if (scr === 'transit') {
-      if (id === 'UP') trSt.sel = Math.max(0, trSt.sel - 1);
-      else if (id === 'DOWN') trSt.sel = Math.min(trSt.fields.length - 1, trSt.sel + 1);
-      else if (id === 'LEFT' && trSt.sel < 4) trSt.sel = Math.max(0, trSt.sel - 1);
-      else if (id === 'RIGHT' && trSt.sel < 4) trSt.sel = Math.min(3, trSt.sel + 1);
+      if (id === 'UP') { commitDraft(trSt); trSt.sel = Math.max(0, trSt.sel - 1); }
+      else if (id === 'DOWN') { commitDraft(trSt); trSt.sel = Math.min(trSt.fields.length - 1, trSt.sel + 1); }
+      else if (id === 'LEFT' && trSt.sel < 4) { commitDraft(trSt); trSt.sel = Math.max(0, trSt.sel - 1); }
+      else if (id === 'RIGHT' && trSt.sel < 4) { commitDraft(trSt); trSt.sel = Math.min(3, trSt.sel + 1); }
       else if (id === 'EXE') {
+        commitDraft(trSt);
         if (trSt.sel === trSt.fields.length - 1) finishTransit();
         else trSt.sel++;
       }
       return;
     }
     if (scr === 'targetTable') {
-      if (id === 'UP') tgSt.sel = tgSt.sel >= 6 ? tgSt.sel - 2 : Math.max(0, tgSt.sel - 2);
-      else if (id === 'DOWN') tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 2);
-      else if (id === 'LEFT') tgSt.sel = Math.max(0, tgSt.sel - 1);
-      else if (id === 'RIGHT') tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 1);
+      if (id === 'UP') { commitDraft(tgSt); tgSt.sel = tgSt.sel >= 6 ? tgSt.sel - 2 : Math.max(0, tgSt.sel - 2); }
+      else if (id === 'DOWN') { commitDraft(tgSt); tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 2); }
+      else if (id === 'LEFT') { commitDraft(tgSt); tgSt.sel = Math.max(0, tgSt.sel - 1); }
+      else if (id === 'RIGHT') { commitDraft(tgSt); tgSt.sel = Math.min(tgSt.fields.length - 1, tgSt.sel + 1); }
       else if (id === 'EXE') {
+        commitDraft(tgSt);
         if (tgSt.sel === tgSt.fields.length - 1) checkTargetTable();
         else tgSt.sel++;
       }
@@ -450,8 +481,8 @@
       return;
     }
     if (scr === 'transit') {
-      if (t === 'go') { finishTransit(); return; }
-      if (t.startsWith('f:')) { trSt.sel = Number(t.slice(2)); return; }
+      if (t === 'go') { commitDraft(trSt); finishTransit(); return; }
+      if (t.startsWith('f:')) { commitDraft(trSt); trSt.sel = Number(t.slice(2)); return; }
       return;
     }
     if (scr === 'transitDone') {
@@ -463,8 +494,8 @@
       return;
     }
     if (scr === 'targetTable') {
-      if (t === 'check') { checkTargetTable(); return; }
-      if (t.startsWith('f:')) { tgSt.sel = Number(t.slice(2)); return; }
+      if (t === 'check') { commitDraft(tgSt); checkTargetTable(); return; }
+      if (t.startsWith('f:')) { commitDraft(tgSt); tgSt.sel = Number(t.slice(2)); return; }
       return;
     }
     if (scr === 'targetConfirm') {
@@ -536,9 +567,9 @@
         '</div>';
     } else if (scr === 'alignEdit') {
       const e = alEdit;
-      html = headHtml(e.entry ? '線形を直す' : '線形を入れる', ['flick', 'dms', 'nav']) +
+      html = headHtml(e.entry ? '線形を直す' : '線形を入れる', ['dms', 'nav']) +
         '<div class="ca-lcd">' +
-        '<p class="ca-hint">セルを押すか ▲▼ で選び、電卓キーで入力（i / あ で日本語フリック）</p>' +
+        '<p class="ca-hint">セルを押すか ▲▼ で選び、下の「日本語 / ALPHA / 数字」で入力切替</p>' +
         '<table class="ca-tbl"><tbody>' + e.fields.map((f, i) => {
           const on = e.sel === i, v = f.get();
           let disp;
@@ -562,11 +593,14 @@
       const t = trSt, p = Vw.parseAngle(t.an);
       const cell = (idx, label, extra) => {
         const f = t.fields[idx], on = t.sel === idx;
-        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + esc(label) + '</span>' + cellVal(f.get(), on) + (extra || '') + '</td>';
+        const valHtml = (on && idx < 4)
+          ? '<div class="ca-prev">' + esc(f.get() || '―') + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
+          : cellVal(f.get(), on);
+        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + esc(label) + '</span>' + valHtml + (extra || '') + '</td>';
       };
       const angExtra = p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>';
       html = headHtml('トランシット（' + t.a.name + '）', ['dms', 'nav']) +
-        '<div class="ca-lcd"><table class="ca-tbl"><tbody>' +
+        '<div class="ca-lcd"><table class="ca-tbl ca-transit-tbl"><tbody>' +
         '<tr>' + cell(0, '後視点 X') + cell(1, '後視点 Y') + '</tr>' +
         '<tr>' + cell(2, '機械点 X') + cell(3, '機械点 Y') + '</tr>' +
         '<tr>' + cell(4, '距離') + cell(5, '角度', angExtra) + '</tr>' +
@@ -595,7 +629,10 @@
       const t = tgSt;
       const stCell = (idx, label) => {
         const f = t.fields[idx], on = t.sel === idx;
-        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + label + '</span>' + cellVal(f.get(), on) + '</td>';
+        const valHtml = on
+          ? '<div class="ca-prev">' + esc(f.get() || '―') + '</div><div class="ca-draft">' + cellVal(t.draft, true) + '</div>'
+          : cellVal(f.get(), false);
+        return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + label + '</span>' + valHtml + '</td>';
       };
       html = headHtml('ターゲット（' + t.a.name + '）', ['dms', 'nav']) +
         '<div class="ca-lcd">' +
@@ -616,21 +653,25 @@
         '<div class="ca-btns"><button type="button" class="ca-btn pri" data-tap="check">確かめへ（EXE）</button></div></div>';
     } else if (scr === 'targetConfirm') {
       const t = tgSt, s = stationOfTarget();
+      const resCell = (x, y, j) => '<td class="ca-rescell"><div class="ca-res">' +
+        '<div class="ca-res-xy"><span>X ' + f3(x) + '</span><span>Y ' + f3(y) + '</span></div>' +
+        '<div class="ca-res-pos"><span>' + esc(posCode(j)) + '</span><span><b>' + esc(Vw.mmText(j)) + '</b></span></div>' +
+        '</div></td>';
       html = headHtml('入れた値の確かめ') + '<div class="ca-lcd">' +
         '<p class="ca-sub">後視点 X ' + f3(s.bx) + '　Y ' + f3(s.by) + ' ／ 機械点 X ' + f3(s.ox) + '　Y ' + f3(s.oy) + '</p>' +
-        '<table class="ca-tbl"><thead><tr><th>測点</th><th>距離</th><th>角度</th><th>測点X</th><th>測点Y</th><th>誤差</th></tr></thead><tbody>' +
+        '<table class="ca-tbl ca-confirm-tbl"><thead><tr><th>測点</th><th>距離</th><th>角度</th><th>誤差</th></tr></thead><tbody>' +
         t.rows.map(r => {
           const p = r.res;
           return '<tr><th>' + esc(p.name) + '</th><td>' + f3(p.d) + '</td><td>' + esc(Vw.fmtAngle(p.h)) + '</td>' +
-            '<td>' + f3(p.x) + '</td><td>' + f3(p.y) + '</td><td><b>' + esc(Vw.sideLine(p.j)) + '</b></td></tr>';
+            resCell(p.x, p.y, p.j) + '</tr>';
         }).join('') +
         (t.pred ? '<tr class="ca-pred"><th>次回予測</th><td>' + f3(t.pred.len) + '</td><td>' + t.pred.bend.toFixed(3) + '°</td>' +
-          '<td>' + f3(t.pred.x) + '</td><td>' + f3(t.pred.y) + '</td><td><b>' + esc(Vw.sideLine(t.pred.j)) + '</b></td></tr>' : '') +
+          resCell(t.pred.x, t.pred.y, t.pred.j) + '</tr>' : '') +
         '</tbody></table>' +
         '<div class="ca-btns"><button type="button" class="ca-btn" data-tap="fix">戻って直す</button>' +
         '<button type="button" class="ca-btn pri" data-tap="visual">図を見る（EXE）</button></div></div>';
     } else if (scr === 'pipeNo') {
-      html = headHtml('測量結果を保存しますか', ['flick']) + '<div class="ca-lcd">' +
+      html = headHtml('測量結果を保存しますか') + '<div class="ca-lcd">' +
         '<p class="ca-msg">管番号を入れると「日付・時刻＋管番号」で保存します（BACKUP に入ります）。</p>' +
         '<table class="ca-tbl"><tbody><tr class="ca-active"><th>管番号</th><td class="ca-val">' + cellVal(pipeSt.no, true) + '</td></tr></tbody></table>' +
         (msg ? '<p class="ca-err">' + esc(msg) + '</p>' : '') +
@@ -642,5 +683,5 @@
     if (act) act.scrollIntoView({ block: 'nearest' });
   }
 
-  root.FxCurveApp = { enter, render, onKey, onChar, onTap, getText, replaceTail, alignSummary };
+  root.FxCurveApp = { enter, render, onKey, onChar, onTap, getText, replaceTail, alignSummary, canFlick };
 })(typeof window !== 'undefined' ? window : globalThis);

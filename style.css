@@ -390,8 +390,12 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .ca-tools { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 .ca-tbtn { border: 1px solid #496548; background: #d6e1c9; color: var(--ink); border-radius: 4px; padding: 1px 6px; font-size: .78em; font-weight: 700; cursor: pointer; }
 .ca-tbtn.on { background: var(--ink); color: var(--lcd); }
-.ca-lcd { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px 1px; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: .82em; }
-.ca-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; background: #ffffff28; }
+.ca-lcd { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; container-type: inline-size; display: flex; flex-direction: column; gap: 6px; padding: 2px 1px; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: clamp(12.5px, 3.3cqi, 17px); }
+.ca-tbl { width: 100%; max-width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; background: #ffffff28; }
+.ca-transit-tbl { table-layout: fixed; width: min(100%, 24em); }
+.ca-transit-tbl th, .ca-transit-tbl td { width: 50%; }
+.ca-prev { opacity: .65; font-size: .88em; line-height: 1.15; }
+.ca-draft { margin-top: 1px; min-height: 1.2em; }
 .ca-tbl th, .ca-tbl td { border: 1px solid #49654866; padding: 4px 6px; text-align: left; vertical-align: middle; }
 .ca-tbl th { background: #0001; font-weight: 700; white-space: nowrap; font-size: .88em; }
 .ca-tbl td.ca-act { text-align: right; white-space: nowrap; }
@@ -406,7 +410,16 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .ca-ok { font-size: .82em; color: #1d4d1d; font-weight: 700; }
 .ca-bad { color: #a82020; font-weight: 700; }
 .ca-dir { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--ink); color: var(--lcd); font-weight: 700; }
-.ca-errcell { font-size: .86em; font-weight: 700; white-space: nowrap; }
+.ca-errcell { font-size: .86em; font-weight: 700; white-space: normal; word-break: keep-all; line-height: 1.25; }
+.ca-confirm-tbl th, .ca-confirm-tbl td { padding: 3px 4px; font-size: .92em; }
+.ca-rescell { padding: 3px 4px; font-size: .88em; }
+.ca-res { display: grid; grid-template-columns: auto 1fr; gap: 0 6px; align-items: center; }
+.ca-res-xy, .ca-res-pos { display: flex; flex-direction: column; white-space: nowrap; line-height: 1.25; }
+.ca-res-pos { border-left: 1px solid #49654866; padding-left: 6px; }
+@container (max-width: 390px) {
+  .ca-res { display: flex; flex-direction: column; gap: 1px; }
+  .ca-res-pos { border-left: 0; padding-left: 0; }
+}
 .ca-pred { background: #2d6b3822; }
 .ca-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .ca-btn { border: 1px solid #496548; background: #d6e1c9; color: var(--ink); border-radius: 5px; padding: 5px 10px; font-weight: 700; cursor: pointer; }
@@ -439,3 +452,12 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .flick-pop .fp-r { grid-column: 3; grid-row: 2; }
 .flick-pop .fp-d { grid-column: 2; grid-row: 3; }
 .calc.flick-on [data-k="CPLX"] .main { background: linear-gradient(#f0b640, var(--shift)) !important; color: #1d1a12 !important; }
+
+/* 日本語 → ALPHA → 数字 切替バー（テンキーの上、液晶の下） */
+.input-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 3px 4px; background: #23252a; border: 1px solid #3c4048; border-radius: 8px; }
+.input-bar[hidden] { display: none; }
+.input-bar .ib-btn { flex: 1 1 0; padding: 5px 4px; border: 1px solid #4a4e58; border-radius: 6px; background: #2e3138; color: #c8ccd4; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; white-space: nowrap; }
+.input-bar .ib-btn.on { background: #e0a12a; color: #191814; border-color: #e0a12a; }
+.input-bar .ib-sep { font-size: 10px; color: #7a808c; user-select: none; }
+.input-bar .ib-cycle { padding: 5px 10px; border: 1px solid #566380; border-radius: 6px; background: #3b4459; color: #eef2ff; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.input-bar .ib-cycle:active, .input-bar .ib-btn:active { filter: brightness(1.2); }

@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.22';
+  const VERSION = '1.4.23';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -1841,45 +1841,59 @@
     toast('エディターで開きました。保存すると電卓にもすぐ反映されます');
   }
   // SHIFT・ALPHA が有効な間は、キーの表記をその機能に切り替える
-  let renderedFlick = false;
+  let renderedFlick = false, renderedFlickMode = null;
   function flickTarget() {
+    const onModeChange = () => { render(); };
     if (mode === 'curve') return {
       onChar: s => { FxCurveApp.onChar(s); render(); },
       getText: () => FxCurveApp.getText(),
       replaceTail: (n, s) => { FxCurveApp.replaceTail(n, s); render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }
+      onClose: () => { flick = false; render(); }, onModeChange
     };
     if (mode === 'name') return {
       onChar: s => { if (Array.from(nameIn.text).length < 12) { nameIn.text += s; render(); } },
       getText: () => nameIn.text,
       replaceTail: (n, s) => { const a = Array.from(nameIn.text); nameIn.text = a.slice(0, Math.max(0, a.length - n)).join('') + s; render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }
+      onClose: () => { flick = false; render(); }, onModeChange
     };
     if (mode === 'edit') return {
       onChar: s => { editInsert(s); render(); },
       getText: () => { const ta = $('editor'); return ta.value.slice(0, ta.selectionStart); },
       replaceTail: (n, s) => { const ta = $('editor'), p = ta.selectionStart; ta.setRangeText(s, Math.max(0, p - n), p, 'end'); editChanged(); render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }
+      onClose: () => { flick = false; render(); }, onModeChange
     };
     return {
       onChar: s => { insertText(s); render(); },
       getText: () => comp.toks.slice(0, comp.cur).join(''),
       replaceTail: (n, s) => { comp.toks.splice(Math.max(0, comp.cur - n), n, s); comp.cur = Math.max(0, comp.cur - n) + 1; render(); },
       onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
-      onClose: () => { flick = false; render(); }
+      onClose: () => { flick = false; render(); }, onModeChange
     };
   }
   function updateKeyFaces() {
     const canFlick = flick && window.FxFlick && ['name', 'curve', 'edit', 'comp'].includes(mode);
     if (!canFlick && flick) flick = false;
-    if (canFlick !== renderedFlick) {
+    const flickMode = canFlick ? window.FxFlick.getMode() : null;
+    if (canFlick !== renderedFlick || flickMode !== renderedFlickMode) {
       renderedFlick = canFlick;
+      renderedFlickMode = flickMode;
       const nk = $('nkeys');
       if (canFlick) window.FxFlick.render(nk, flickTarget());
       else { if (window.FxFlick) window.FxFlick.clearHandlers(nk); nk.innerHTML = NROWS.map(r => r.map(k => keyHtml(KEYS[k[0]])).join('')).join(''); }
+    }
+    const ib = $('inputBar');
+    if (ib) {
+      const showBar = !!(window.FxFlick && (mode === 'name' || (mode === 'curve' && window.FxCurveApp && FxCurveApp.canFlick())));
+      ib.hidden = !showBar;
+      if (showBar) {
+        const cur = !canFlick ? 'num' : flickMode;
+        ib.querySelectorAll('[data-im]').forEach(b => {
+          if (b.dataset.im !== 'next') b.classList.toggle('on', b.dataset.im === cur);
+        });
+      }
     }
     const a = alpha || alock;
     document.querySelectorAll('.keypad .key').forEach(b => {
@@ -2099,6 +2113,21 @@
     resultBtn.setAttribute('aria-label', '計算結果をコピー・共有');
     resultBtn.addEventListener('click', openResult);
     document.querySelector('.blk-lcd .bar').prepend(resultBtn);
+    const ib = $('inputBar');
+    if (ib) {
+      ib.addEventListener('pointerdown', e => e.preventDefault());
+      ib.addEventListener('click', e => {
+        const b = e.target.closest('[data-im]');
+        if (!b || !window.FxFlick) return;
+        const im = b.dataset.im;
+        const cur = !flick ? 'num' : FxFlick.getMode();
+        const order = ['kana', 'alnum', 'num'];
+        const target = (im === 'next' || im === cur) ? order[(order.indexOf(cur) + 1) % order.length] : im;
+        if (target === 'num') { flick = false; }
+        else { FxFlick.setMode(target); flick = true; }
+        render();
+      });
+    }
     bindTabs();
     fitLcd();
     window.addEventListener('resize', fitLcd);

@@ -496,5 +496,5 @@
     });
   }
 
-  root.FxCurveView = { open, alignmentPaths, transit, survey, records, recordCsv, parseAngle, fmtAngle, pointFrom, sideLine };
+  root.FxCurveView = { open, alignmentPaths, transit, survey, records, recordCsv, parseAngle, fmtAngle, pointFrom, sideLine, mmText };
 })(typeof window !== 'undefined' ? window : globalThis);
