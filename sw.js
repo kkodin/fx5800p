@@ -1,6 +1,6 @@
-const CACHE = 'pocket-calc-v3-20261126c-v1420';
-const ASSETS = ['./', './index.html', './help.html', './style.css?v=1.4.20', './engine.js?v=1.4.20', './basic.js?v=1.4.20', './formulas.js?v=1.4.20', './import.js?v=1.4.20', './complete.js?v=1.4.20', './app.js?v=1.4.20', './curveview.js?v=1.4.20', './curveapp.js?v=1.4.20', './editor.html', './editor.css?v=1.4.20', './editor.js?v=1.4.20', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
-  './genba.html', './genba.css?v=1.4.20', './angle.js?v=1.4.20', './geo.js?v=1.4.20', './points.js?v=1.4.20', './store.js?v=1.4.20', './dialog.js?v=1.4.20', './sokusetsu.js?v=1.4.20', './plot.js?v=1.4.20', './genba.js?v=1.4.20', './genba-calc.js?v=1.4.20', './zip.js?v=1.4.20', './cclwrite.js?v=1.4.20', './senkei.js?v=1.4.20', './layout.js?v=1.4.20', './proginfo.js?v=1.4.20', './pickxy.js?v=1.4.20'];
+const CACHE = 'pocket-calc-v3-20261127a-v1421';
+const ASSETS = ['./', './index.html', './help.html', './style.css?v=1.4.21', './engine.js?v=1.4.21', './basic.js?v=1.4.21', './formulas.js?v=1.4.21', './import.js?v=1.4.21', './complete.js?v=1.4.21', './app.js?v=1.4.21', './curveview.js?v=1.4.21', './curveapp.js?v=1.4.21', './editor.html', './editor.css?v=1.4.21', './editor.js?v=1.4.21', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
+  './genba.html', './genba.css?v=1.4.21', './angle.js?v=1.4.21', './geo.js?v=1.4.21', './points.js?v=1.4.21', './store.js?v=1.4.21', './dialog.js?v=1.4.21', './sokusetsu.js?v=1.4.21', './plot.js?v=1.4.21', './genba.js?v=1.4.21', './genba-calc.js?v=1.4.21', './zip.js?v=1.4.21', './cclwrite.js?v=1.4.21', './senkei.js?v=1.4.21', './layout.js?v=1.4.21', './proginfo.js?v=1.4.21', './pickxy.js?v=1.4.21'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE)
   .then(cache => cache.addAll(ASSETS.map(path => new Request(new URL(path, self.location.href), { cache: 'reload' }))))
   .then(() => self.skipWaiting())));

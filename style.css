@@ -382,3 +382,6 @@ html.dlg-open, html.dlg-open body { overflow: hidden; }
 .ca-nums { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 10px; }
 .ca-nums .dlg-btn { min-height: 52px; font-size: 20px; }
 .cv-in.ca-name { max-width: none; }
+
+/* 編集中の液晶の「◀EXIT」（保存して Program Menu へ） */
+.ind .ed-exit { border: 1px solid currentColor; border-radius: 4px; padding: 0 .4em; margin-right: .3em; font-weight: 700; }

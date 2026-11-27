@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.20';
+  const VERSION = '1.4.21';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -126,7 +126,8 @@
     ind.push('<span class="tapind' + (S.disp.mode === 'Norm' ? ' faint' : '') + '" data-ind="disp" title="表示の桁を選ぶ">' + (S.disp.mode === 'Norm' ? 'Norm' + S.disp.n : S.disp.mode + ' ' + S.disp.n) + '</span>');
     if (mode === 'run' && run && run.wait && run.wait.type === 'pause') ind.push('<b>Disp</b>');
     if (mode === 'run' && run && !run.wait && !run.done) ind.push('<b class="busy">▮</b>');
-    if (mode === 'edit' && edit) ind.unshift('<span class="ed">' + esc(edit.prog.name) + (edit.prog.mode === 'Formula' ? ' FM' : '') + '</span>');
+    // 編集中は「◀EXIT」も出す（スマホのキーボードで電卓のキーが隠れていても戻れるように）
+    if (mode === 'edit' && edit) ind.unshift('<span class="tapind ed-exit" data-ind="exit" title="保存して Program Menu へ戻る">◀EXIT</span><span class="ed">' + esc(edit.prog.name) + (edit.prog.mode === 'Formula' ? ' FM' : '') + '</span>');
     // 実行中に値を聞かれたとき：その変数の日本語の名前（'変数 の行から）を右側に出す
     if (mode === 'run' && hintName && !(run && run.grid && run.grid.wide)) ind.push('<span class="ihint" title="' + esc(hintName) + '">' + esc(hintName) + '</span>');
     if (extra) ind.push(extra);
@@ -1070,14 +1071,14 @@
     const p = edit.prog;
     edit = null;
     $('editor').blur();
+    // 実機と同じく、書いた所までをそのまま残して Program Menu（1:NEW 2:RUN 3:EDIT 4:DELETE）へ戻る
     try {
       if (p.mode === 'COMP') B.check(p.source);
       toast('保存しました：' + p.name);
-      openProgList('EDIT', p.name);
     } catch (e) {
       toast('保存しました。ただし文法エラー：' + (e.line ? e.line + '行 ' : '') + e.message, 6000);
-      openProgList('EDIT', p.name);
     }
+    openProgMenu();
   }
   function editKey(k) {
     const id = k.id, ta = $('editor');
@@ -1983,6 +1984,7 @@
     $('screen').addEventListener('click', e => { const t = e.target.closest('[data-tap]'); if (!t || t !== downOn) return; downOn = null; lcdTap(e); });
     $('ind').addEventListener('click', e => {
       const t = e.target.closest('[data-ind]'); if (!t || t !== downOn) return; downOn = null;
+      if (t.dataset.ind === 'exit') { if (mode === 'edit') press('EXIT'); return; }
       if (['run', 'edit', 'name'].includes(mode) || pending) return;
       const k = t.dataset.ind;
       if (k === 'angle') openAngleMenu(); else if (k === 'disp') openDispMenu(); else if (k === 'var') { remember(); openVarList(); menu.back = toComp; }
