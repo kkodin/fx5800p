@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const LETTERS = E.LETTERS;
   const STORE_KEY = 'fx5800p-emu-v1';
-  const VERSION = '1.4.21';
+  const VERSION = '1.4.22';
 
   // ---- 保存データ ----------------------------------------------------
   const blankVars = () => { const v = { Ans: 0, __z: [], __dim: 0 }; for (const L of LETTERS) v[L] = 0; return v; };
@@ -69,7 +69,7 @@
   const ROWS = [
     [['SHIFT', 'SHIFT', '', '', 71, null, null, 'k-shift'], ['ALPHA', 'ALPHA', 'A-LOCK', '', 72, null, null, 'k-alpha'], ['EXIT', 'EXIT', '', '', 73, null, null, 'k-light'], ['FMLA', 'FMLA', '', '', 74, null, null, 'k-light'], ['CALC', 'CALC', '', '', 75, null, null, 'k-light'], ['SOLVE', 'SOLVE', '', '', 76, null, null, 'k-light']],
     [['FILE', 'FILE', 'Prog', '', 61, null, 'Prog "', 'k-fn'], ['SQRT', '√▢', '∛', '', 62, '√(', '∛(', 'k-fn'], ['SQR', 'x²', 'x⁻¹', '', 63, '²', '⁻¹', 'k-fn'], ['LOG', 'log', '10ˣ', '', 64, 'log(', '10^(', 'k-fn'], ['LN', 'ln', 'eˣ', '', 65, 'ln(', 'e^(', 'k-fn'], ['POW', 'x▢', 'ˣ√', '', 66, '^(', 'ˣ√(', 'k-fn']],
-    [['CPLX', 'i', '', 'A', 51, null, null, 'k-fn'], ['FRAC', '▭⁄▭', '', 'B', 52, '⌟', null, 'k-fn'], ['DMS', '°′″', '▸DMS', 'C', 53, '°', '▸DMS', 'k-fn'], ['SIN', 'sin', 'sin⁻¹', 'D', 54, 'sin(', 'sin⁻¹(', 'k-fn'], ['COS', 'cos', 'cos⁻¹', 'E', 55, 'cos(', 'cos⁻¹(', 'k-fn'], ['TAN', 'tan', 'tan⁻¹', 'F', 56, 'tan(', 'tan⁻¹(', 'k-fn']],
+    [['CPLX', 'あ', 'i', 'A', 51, null, null, 'k-fn'], ['FRAC', '▭⁄▭', '', 'B', 52, '⌟', null, 'k-fn'], ['DMS', '°′″', '▸DMS', 'C', 53, '°', '▸DMS', 'k-fn'], ['SIN', 'sin', 'sin⁻¹', 'D', 54, 'sin(', 'sin⁻¹(', 'k-fn'], ['COS', 'cos', 'cos⁻¹', 'E', 55, 'cos(', 'cos⁻¹(', 'k-fn'], ['TAN', 'tan', 'tan⁻¹', 'F', 56, 'tan(', 'tan⁻¹(', 'k-fn']],
     [['RCL', 'RCL', 'STO', '=', 41, null, null, 'k-fn'], ['SD', 'S⇔D', '→', 'G', 42, null, '→', 'k-fn'], ['LP', '(', '', 'H', 43, '(', null, 'k-fn'], ['RP', ')', '', 'I', 44, ')', null, 'k-fn'], ['COMMA', ',', '', 'J', 45, ',', null, 'k-fn'], ['MPLUS', 'M+', 'M−', '"', 46, null, null, 'k-fn']]
   ];
   const NROWS = [
@@ -87,8 +87,8 @@
   const alphaChar = k => { const a = k.al; if (!a) return null; return a === 'SPACE' ? ' ' : a; };
 
   // ---- 画面の状態 ------------------------------------------------------
-  let mode = 'comp';           // comp / error / menu / calc / solve / fmla / name / edit / run / confirm
-  let shift = false, alpha = false, alock = false, pending = null; // pending: 'STO' | 'RCL'
+  let mode = 'comp';           // comp / error / menu / calc / solve / fmla / name / edit / run / confirm / curve
+  let shift = false, alpha = false, alock = false, pending = null, flick = false; // pending: 'STO' | 'RCL'
   let comp = { toks: [], cur: 0, shown: null, histIdx: -1 };
   let errState = null, menu = null, calc = null, solve = null, fm = null, nameIn = null, edit = null, run = null, confirmSt = null;
   let lastKeyCode = 0;
@@ -169,8 +169,9 @@
     if (resultBtn) resultBtn.hidden = !currentResult();
     const lcd = $('lcd');
     lcd.classList.toggle('editing', mode === 'edit');
-    document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu');
-    if (window.FxLayout && FxLayout.setMenu) FxLayout.setMenu(mode === 'menu');
+    document.querySelector('.calc').classList.toggle('menu-open', mode === 'menu' || mode === 'curve');
+    document.querySelector('.calc').classList.toggle('curve-open', mode === 'curve');
+    if (window.FxLayout && FxLayout.setMenu) FxLayout.setMenu(mode === 'menu' || mode === 'curve');
     updateKeyFaces();
     $('editor').hidden = mode !== 'edit';
     $('screen').hidden = mode === 'edit';
@@ -183,6 +184,7 @@
     if (mode === 'name') return renderName();
     if (mode === 'run') return renderRun();
     if (mode === 'confirm') return renderConfirm();
+    if (mode === 'curve') return FxCurveApp.render($('screen'));
     if (mode === 'edit') return indicators();
   }
 
@@ -1259,14 +1261,20 @@
     return st;
   }
   function openCurveApp(back) {
-    if (!window.FxCurveApp || !window.FxDialog) { toast('曲線の測量を読めませんでした'); return; }
-    FxCurveApp.open({
+    if (!window.FxCurveApp) { toast('曲線の測量を読めませんでした'); return; }
+    flick = false;
+    mode = 'curve';
+    FxCurveApp.enter({
       state: curveAppState, save, toast,
       download: (name, text) => { download(name, '﻿' + text, 'text/csv'); toast('CSV を書き出しました'); },
       // SENTEI で保存した線形を写して使えるようにする（写すだけ。あとは別々）
       senteiAligns: () => senteiSites().map(e => ({ name: e.name, align: alignFromInputs(e.inputs) })),
-      onClose: back
+      setFlick: on => { flick = !!on; render(); },
+      isFlick: () => flick,
+      redraw: render,
+      onClose: () => { flick = false; back(); render(); }
     });
+    render();
   }
   // SENTEI で入れた値（聞かれた順）から、線形（senkei.js の形）を作る
   function alignFromInputs(inputs) {
@@ -1695,18 +1703,21 @@
   }
   function handle(k, wasShift, wasAlpha) {
     const id = k.id;
+    if (id === 'CPLX' && !wasShift && !wasAlpha && ['name', 'curve', 'edit', 'comp'].includes(mode)) {
+      if (window.FxFlick) { flick = !flick; render(); return; }
+    }
     // ALPHA で文字を入れる
-    if (wasAlpha && alphaChar(k) && !['name', 'menu', 'confirm'].includes(mode)) {
+    if (wasAlpha && alphaChar(k) && !['name', 'menu', 'confirm', 'curve'].includes(mode)) {
       if (mode === 'run' && !(run && run.wait && run.wait.type === 'input')) return;
       return insertText(alphaChar(k));
     }
-    if (id === 'MODE') { if (mode === 'edit') closeEditorSilently(); if (mode === 'run' && run) { run.stopped = true; } return wasShift ? openSetup() : openMode(); }
+    if (id === 'MODE') { flick = false; if (mode === 'edit') closeEditorSilently(); if (mode === 'run' && run) { run.stopped = true; } return wasShift ? openSetup() : openMode(); }
     if (id === 'FUNC') {
       if (['comp', 'edit', 'calc', 'solve'].includes(mode) || (mode === 'fmla' && fm.phase === 'input') || (mode === 'run' && run && run.wait && run.wait.type === 'input')) return openFunction();
       return;
     }
-    if (id === 'FILE' && !wasShift && !['edit', 'name'].includes(mode)) { if (mode === 'run' && run) run.stopped = true; return openProgList('RUN'); }
-    if (id === 'FMLA' && !['edit', 'name', 'run'].includes(mode)) return openFmlaList();
+    if (id === 'FILE' && !wasShift && !['edit', 'name'].includes(mode)) { flick = false; if (mode === 'run' && run) run.stopped = true; return openProgList('RUN'); }
+    if (id === 'FMLA' && !['edit', 'name', 'run', 'curve'].includes(mode)) return openFmlaList();
     if (id === 'RCL' && mode === 'comp') { pending = wasShift ? 'STO' : 'RCL'; return; }
     if (id === 'RCL' && wasShift && (mode === 'calc' || mode === 'solve')) return;
     switch (mode) {
@@ -1720,6 +1731,7 @@
       case 'edit': return editKey(k);
       case 'run': return runKey(k);
       case 'confirm': return confirmKey(k);
+      case 'curve': return wasAlpha && alphaChar(k) ? FxCurveApp.onChar(alphaChar(k)) : FxCurveApp.onKey(k, wasShift, wasAlpha);
     }
   }
   function closeEditorSilently() { editChanged(); edit = null; $('editor').blur(); }
@@ -1829,13 +1841,54 @@
     toast('エディターで開きました。保存すると電卓にもすぐ反映されます');
   }
   // SHIFT・ALPHA が有効な間は、キーの表記をその機能に切り替える
+  let renderedFlick = false;
+  function flickTarget() {
+    if (mode === 'curve') return {
+      onChar: s => { FxCurveApp.onChar(s); render(); },
+      getText: () => FxCurveApp.getText(),
+      replaceTail: (n, s) => { FxCurveApp.replaceTail(n, s); render(); },
+      onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
+      onClose: () => { flick = false; render(); }
+    };
+    if (mode === 'name') return {
+      onChar: s => { if (Array.from(nameIn.text).length < 12) { nameIn.text += s; render(); } },
+      getText: () => nameIn.text,
+      replaceTail: (n, s) => { const a = Array.from(nameIn.text); nameIn.text = a.slice(0, Math.max(0, a.length - n)).join('') + s; render(); },
+      onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
+      onClose: () => { flick = false; render(); }
+    };
+    if (mode === 'edit') return {
+      onChar: s => { editInsert(s); render(); },
+      getText: () => { const ta = $('editor'); return ta.value.slice(0, ta.selectionStart); },
+      replaceTail: (n, s) => { const ta = $('editor'), p = ta.selectionStart; ta.setRangeText(s, Math.max(0, p - n), p, 'end'); editChanged(); render(); },
+      onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
+      onClose: () => { flick = false; render(); }
+    };
+    return {
+      onChar: s => { insertText(s); render(); },
+      getText: () => comp.toks.slice(0, comp.cur).join(''),
+      replaceTail: (n, s) => { comp.toks.splice(Math.max(0, comp.cur - n), n, s); comp.cur = Math.max(0, comp.cur - n) + 1; render(); },
+      onDel: () => press('DEL'), onAc: () => press('AC'), onExe: () => press('EXE'),
+      onClose: () => { flick = false; render(); }
+    };
+  }
   function updateKeyFaces() {
+    const canFlick = flick && window.FxFlick && ['name', 'curve', 'edit', 'comp'].includes(mode);
+    if (!canFlick && flick) flick = false;
+    if (canFlick !== renderedFlick) {
+      renderedFlick = canFlick;
+      const nk = $('nkeys');
+      if (canFlick) window.FxFlick.render(nk, flickTarget());
+      else { if (window.FxFlick) window.FxFlick.clearHandlers(nk); nk.innerHTML = NROWS.map(r => r.map(k => keyHtml(KEYS[k[0]])).join('')).join(''); }
+    }
     const a = alpha || alock;
     document.querySelectorAll('.keypad .key').forEach(b => {
+      if (!b.dataset.k) return;
       const k = KEYS[b.dataset.k]; if (!k || k.id === 'SHIFT' || k.id === 'ALPHA') return;
       const main = b.querySelector('.main');
       let text = k.label, cls = '';
-      if (shift) { if (k.sl) { text = k.sl; cls = 'face-s'; } else cls = 'face-off'; }
+      if (k.id === 'CPLX' && canFlick && !shift && !a) { text = '数字'; }
+      else if (shift) { if (k.sl) { text = k.sl; cls = 'face-s'; } else cls = 'face-off'; }
       else if (a) { if (k.al) { text = k.al; cls = 'face-a'; } else cls = 'face-off'; }
       if (main.textContent !== text) main.textContent = text;
       b.classList.toggle('face-s', cls === 'face-s');
@@ -1844,6 +1897,7 @@
     });
     document.querySelector('.calc').classList.toggle('shift-on', shift);
     document.querySelector('.calc').classList.toggle('alpha-on', a && !shift);
+    document.querySelector('.calc').classList.toggle('flick-on', canFlick);
   }
   function keyHtml(k) {
     return '<button type="button" class="key ' + k.cls + '" data-k="' + k.id + '" aria-label="' + esc(k.label) + '">' +
@@ -1968,6 +2022,7 @@
     else if (mode === 'calc' || mode === 'solve') { const st = mode === 'calc' ? calc : solve; if (substCommit(st, mode)) st.idx = Number(t); }
     else if (mode === 'confirm') { confirmKey({ id: t === 'yes' ? 'EXE' : 'EXIT' }); }
     else if (mode === 'name') nameTap(t);
+    else if (mode === 'curve') FxCurveApp.onTap(t);
     else if (mode === 'run' && t === 'pickxy') pickFromList();
     else if (mode === 'run' && run?.dms && /^dms[0-2]$/.test(t)) run.dms.part = Number(t[3]);
     render();
