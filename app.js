@@ -1902,6 +1902,7 @@
       const main = b.querySelector('.main');
       let text = k.label, cls = '';
       if (k.id === 'CPLX' && canFlick && !shift && !a) { text = '数字'; }
+      else if (k.id === 'EXP' && mode === 'curve' && window.FxCurveApp && FxCurveApp.isAngleField && FxCurveApp.isAngleField() && !shift && !a) { text = '°′″'; }
       else if (shift) { if (k.sl) { text = k.sl; cls = 'face-s'; } else cls = 'face-off'; }
       else if (a) { if (k.al) { text = k.al; cls = 'face-a'; } else cls = 'face-off'; }
       if (main.textContent !== text) main.textContent = text;

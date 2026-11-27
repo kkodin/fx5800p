@@ -33,6 +33,7 @@
   const redraw = () => env && env.redraw && env.redraw();
   const closeFlick = () => { if (env && env.isFlick && env.isFlick()) env.setFlick(false); };
   const canFlick = () => scr === 'alignEdit' || scr === 'pipeNo';
+  const isAngleField = () => { const f = activeField(); return !!(f && f.kind === 'angle'); };
   const posCode = j => !j ? '―' : (j.type === 'cv' ? 'R-' : 'S-') + j.id + (j.priority >= 8 ? '（外）' : '');
 
   function enter(e) {
@@ -208,7 +209,7 @@
     tgSt = {
       a, g: root.FxSenkei.build(a.align), n,
       bx: f3(s.bx || 0), by: f3(s.by || 0), ox: f3(s.ox || 0), oy: f3(s.oy || 0),
-      rows, sel: 0, draft: '', pred: null, fields: []
+      rows, sel: 4, draft: '', pred: null, fields: []
     };
     const fs = [
       { id: 'bx', label: 'BX', kind: 'num', row: -1, get: () => tgSt.bx, set: v => { tgSt.bx = v; } },
@@ -347,7 +348,7 @@
       if (f.kind !== 'dir') { f.set(''); afterEdit(); }
       return;
     }
-    if (id === 'DMS' && f.kind === 'angle') { onChar('°'); return; }
+    if ((id === 'DMS' || id === 'EXP') && f.kind === 'angle') { onChar('°'); return; }
     if ((id === 'SUB' || id === 'NEG') && f.kind !== 'dir') { onChar('-'); return; }
     if (id === 'DOT' && f.kind !== 'dir') { onChar('.'); return; }
     if (k.ins && /^[0-9]$/.test(k.ins) && f.kind !== 'dir') { onChar(k.ins); return; }
@@ -567,7 +568,7 @@
         '</div>';
     } else if (scr === 'alignEdit') {
       const e = alEdit;
-      html = headHtml(e.entry ? '線形を直す' : '線形を入れる', ['dms', 'nav']) +
+      html = headHtml(e.entry ? '線形を直す' : '線形を入れる') +
         '<div class="ca-lcd">' +
         '<p class="ca-hint">セルを押すか ▲▼ で選び、下の「日本語 / ALPHA / 数字」で入力切替</p>' +
         '<table class="ca-tbl"><tbody>' + e.fields.map((f, i) => {
@@ -599,7 +600,7 @@
         return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + esc(label) + '</span>' + valHtml + (extra || '') + '</td>';
       };
       const angExtra = p == null ? '' : Number.isFinite(p) ? ' <span class="ca-ok">' + esc(Vw.fmtAngle(p)) + '</span>' : ' <span class="ca-bad">？</span>';
-      html = headHtml('トランシット（' + t.a.name + '）', ['dms', 'nav']) +
+      html = headHtml('トランシット（' + t.a.name + '）') +
         '<div class="ca-lcd"><table class="ca-tbl ca-transit-tbl"><tbody>' +
         '<tr>' + cell(0, '後視点 X') + cell(1, '後視点 Y') + '</tr>' +
         '<tr>' + cell(2, '機械点 X') + cell(3, '機械点 Y') + '</tr>' +
@@ -634,7 +635,7 @@
           : cellVal(f.get(), false);
         return '<td class="ca-val' + (on ? ' ca-active' : '') + '" data-tap="f:' + idx + '"><span class="ca-lbl">' + label + '</span>' + valHtml + '</td>';
       };
-      html = headHtml('ターゲット（' + t.a.name + '）', ['dms', 'nav']) +
+      html = headHtml('ターゲット（' + t.a.name + '）') +
         '<div class="ca-lcd">' +
         '<table class="ca-tbl"><tbody>' +
         '<tr>' + stCell(0, '後視 X') + stCell(1, '後視 Y') + stCell(2, '機械 X') + stCell(3, '機械 Y') + '</tr>' +
@@ -683,5 +684,5 @@
     if (act) act.scrollIntoView({ block: 'nearest' });
   }
 
-  root.FxCurveApp = { enter, render, onKey, onChar, onTap, getText, replaceTail, alignSummary, canFlick };
+  root.FxCurveApp = { enter, render, onKey, onChar, onTap, getText, replaceTail, alignSummary, canFlick, isAngleField };
 })(typeof window !== 'undefined' ? window : globalThis);
